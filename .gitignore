@@ -1,0 +1,15 @@
+node_modules/
+package-lock.json
+dist/
+.env
+captures/
+shots/
+PRODUCT.md
+TESTCREDENTIALS.md
+.tmp-shoot.mjs
+.claude/settings.local.json
+*.log
+.claude/
+.tmp-shoot.mjs/
+Delphee Design System/
+.impeccable/

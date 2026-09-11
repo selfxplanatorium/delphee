@@ -1,0 +1,36 @@
+services:
+  delphi-wrapper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: delphi-wrapper:latest
+    container_name: delphi-wrapper
+    restart: unless-stopped
+    # Bind to loopback only; Caddy terminates TLS in front. If we ever need
+    # to expose this directly, change to "7821:7821" (all interfaces) and
+    # re-think the auth story; the README explicitly warns against public
+    # exposure of the bearer-token API.
+    ports:
+      - "127.0.0.1:7821:7821"
+    # No volume: cache + sessions are RAM-only, so there is no PII at rest to
+    # persist. A restart simply re-fetches from Delphi on next login.
+    env_file: .env
+    environment:
+      - TZ=UTC
+      # Override NODE_ENV in case the dev .env set it to development.
+      - NODE_ENV=production
+      # Pin container port here so it does not leak from the shared .env.
+      # 7821 = deploy. 7822 = local dev. 3000 stays free.
+      - PORT=7821
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:7821/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    # Cap journal noise; 64M is plenty for a tiny express app.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

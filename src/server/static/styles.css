@@ -1,0 +1,1555 @@
+/* Delphi Wrapper — Delphee design system, applied.
+ *
+ * A friendly, polished student portal for Tor Vergata students. Wide appeal,
+ * not a developer console. Warmth comes from Fraunces (display) and Hanken
+ * Grotesk (body); data clarity comes from Spline Sans Mono. Tor Vergata green
+ * appears sparingly — primary actions, session-active, success states, current
+ * nav row — never as the page's spine.
+ *
+ * The reference: `Delphee Design System/` (tokens, components, ui_kits). This
+ * stylesheet is the production port of that system to vanilla HTML classes
+ * (no React runtime). The token layer here mirrors `Delphee Design System/
+ * tokens/*.css`; the component rules below mirror the React primitives'
+ * inline styles in `Delphee Design System/components/*`.
+ *
+ * Tension: the data is dense and tabular (matricola, voti, CFU, SSD, IUV,
+ * codici) so the mono voice is the data voice; but the surface language is
+ * warm and friendly. Hairline rules carry structure, not cards-within-cards.
+ * Glass chrome is reserved for sidebar/drawer/top-bar/toast — never on
+ * reading surfaces. */
+
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..700&family=Hanken+Grotesk:wght@400..700&family=Spline+Sans+Mono:wght@400..600&display=swap");
+
+/* ============================== Tokens ============================== */
+:root {
+  /* Brand */
+  --brand:        oklch(0.50 0.137 152);
+  --brand-strong: oklch(0.43 0.137 152);
+  --brand-text:   oklch(0.46 0.130 152);
+  --brand-soft:   oklch(0.94 0.045 152);
+
+  /* Neutrals — light */
+  --bg:           oklch(0.985 0.003 90);
+  --surface:      oklch(1 0 0);
+  --surface-2:    oklch(0.97 0.003 90);
+  --ink:          oklch(0.22 0.015 250);
+  --ink-2:        oklch(0.45 0.012 250);
+  --ink-3:        oklch(0.60 0.010 250);
+  --line:         oklch(0.91 0.005 250);
+  --line-strong:  oklch(0.82 0.006 250);
+
+  /* Semantic */
+  --ok:           oklch(0.50 0.137 152);
+  --ok-bg:        oklch(0.94 0.045 152);
+  --warn:         oklch(0.62 0.13 65);
+  --warn-bg:      oklch(0.96 0.04 80);
+  --bad:          oklch(0.52 0.18 27);
+  --bad-bg:       oklch(0.96 0.03 27);
+  --info:         oklch(0.52 0.12 250);
+  --info-bg:      oklch(0.96 0.03 250);
+
+  /* Type */
+  --font-display: "Fraunces", ui-serif, Georgia, "Times New Roman", serif;
+  --font-sans:    "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:    "Spline Sans Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --t-2xs: 0.6875rem;
+  --t-xs:  0.75rem;
+  --t-sm:  0.875rem;
+  --t-md:  1rem;
+  --t-lg:  1.125rem;
+  --t-xl:  1.5rem;
+  --t-2xl: 2rem;
+  --t-3xl: 3rem;
+
+  /* Spacing */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 64px;
+  --sp-9: 96px;
+
+  /* Radius — softened toward squircle for the glass material. */
+  --r-1: 5px; --r-2: 10px; --r-3: 14px; --r-4: 20px; --r-full: 9999px;
+  /* Design-system aliases (used by the new component rules). */
+  --r-chip:  var(--r-1);
+  --r-ctrl:  var(--r-2);
+  --r-card:  var(--r-3);
+  --r-modal: var(--r-4);
+
+  /* Weights (design system) */
+  --w-body:   400;
+  --w-medium: 500;
+  --w-bold:   600;
+
+  /* Line-heights (design system) */
+  --lh-prose:   1.55;
+  --lh-heading: 1.30;
+  --lh-row:     1.45;
+
+  /* Fraunces optical-axis presets */
+  --fraunces-hero: "opsz" 144, "SOFT" 0;
+  --fraunces-head: "opsz" 24,  "SOFT" 0;
+
+  /* Elevation */
+  --shadow-1: 0 1px 2px oklch(0.22 0.015 250 / 0.06);
+  --shadow-2: 0 6px 24px oklch(0.22 0.015 250 / 0.10);
+
+  /* Material / depth — Liquid-glass inspired. Glass = translucent chrome that
+   * refracts the ambient field; tiles = layered elevation + a top specular edge.
+   * Readability wins: only chrome and containers get material, never body text. */
+  --glass:       oklch(1 0 0 / 0.72);
+  --glass-blur:  saturate(180%) blur(20px);
+  --rim:         oklch(0.91 0.005 250 / 0.9);
+  --sheen-top:   oklch(1 0 0);
+  --sheen-bot:   oklch(0.992 0.002 250);
+  --edge-hi:     inset 0 1px 0 oklch(1 0 0 / 0.65);
+  --well:        inset 0 1px 2px oklch(0.22 0.015 250 / 0.07), inset 0 0 0 1px oklch(0.91 0.005 250 / 0.6);
+  --elev-1:      0 1px 2px oklch(0.22 0.015 250 / 0.05), 0 4px 12px oklch(0.22 0.015 250 / 0.06);
+  --elev-2:      0 2px 6px oklch(0.22 0.015 250 / 0.08), 0 16px 40px oklch(0.22 0.015 250 / 0.12);
+  --brand-glow:  0 4px 14px oklch(0.50 0.137 152 / 0.30);
+
+  /* Ambient field gradient (the light environment the glass refracts) */
+  --ambient:
+    radial-gradient(120% 80% at 50% -10%, oklch(0.70 0.05 250 / 0.05), transparent 60%),
+    radial-gradient(60% 50% at 110% 10%,  oklch(0.55 0.10 152 / 0.045), transparent 70%);
+
+  /* Hero field — the riepilogo's hero lozenge (brand-soft gradient surface). */
+  --hero-ink:     oklch(0.99 0.004 152);
+
+  /* Z-index */
+  --z-sticky: 10; --z-dropdown: 20; --z-overlay: 30;
+  --z-modal: 40; --z-toast: 50; --z-tooltip: 60;
+
+  /* Motion */
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --dur-slow: 280ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --maxw: 880px;
+  --sidebar: 240px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --brand-strong: oklch(0.58 0.14 152);
+    --brand-text:   oklch(0.74 0.14 152);
+    --brand-soft:   oklch(0.28 0.05 152);
+
+    --bg:           oklch(0.16 0.012 250);
+    --surface:      oklch(0.20 0.013 250);
+    --surface-2:    oklch(0.24 0.013 250);
+    --ink:          oklch(0.95 0.005 250);
+    --ink-2:        oklch(0.72 0.010 250);
+    --ink-3:        oklch(0.58 0.010 250);
+    --line:         oklch(0.30 0.010 250);
+    --line-strong:  oklch(0.40 0.012 250);
+
+    --ok-bg:        oklch(0.28 0.05 152);
+    --warn:         oklch(0.78 0.12 65);
+    --warn-bg:      oklch(0.30 0.05 75);
+    --bad:          oklch(0.72 0.16 27);
+    --bad-bg:       oklch(0.30 0.07 27);
+    --info:         oklch(0.72 0.12 250);
+    --info-bg:      oklch(0.30 0.05 250);
+
+    --shadow-1: 0 1px 2px oklch(0 0 0 / 0.30);
+    --shadow-2: 0 6px 24px oklch(0 0 0 / 0.50);
+
+    --glass:      oklch(0.20 0.013 250 / 0.66);
+    --rim:        oklch(0.40 0.012 250 / 0.7);
+    --sheen-top:  oklch(0.225 0.013 250);
+    --sheen-bot:  oklch(0.205 0.013 250);
+    --edge-hi:    inset 0 1px 0 oklch(1 0 0 / 0.10);
+    --well:       inset 0 1px 2px oklch(0 0 0 / 0.40), inset 0 0 0 1px oklch(0.40 0.012 250 / 0.5);
+    --elev-1:     0 1px 2px oklch(0 0 0 / 0.30), 0 4px 12px oklch(0 0 0 / 0.35);
+    --elev-2:     0 2px 6px oklch(0 0 0 / 0.40), 0 16px 40px oklch(0 0 0 / 0.50);
+    --brand-glow: 0 4px 14px oklch(0.50 0.137 152 / 0.40);
+
+    --ambient:
+      radial-gradient(120% 80% at 50% -10%, oklch(0.70 0.06 250 / 0.10), transparent 60%),
+      radial-gradient(60% 50% at 110% 10%,  oklch(0.60 0.12 152 / 0.10), transparent 70%);
+
+    --hero-ink:    oklch(0.98 0.004 250);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --brand-strong: oklch(0.58 0.14 152);
+  --brand-text:   oklch(0.74 0.14 152);
+  --brand-soft:   oklch(0.28 0.05 152);
+
+  --bg:           oklch(0.16 0.012 250);
+  --surface:      oklch(0.20 0.013 250);
+  --surface-2:    oklch(0.24 0.013 250);
+  --ink:          oklch(0.95 0.005 250);
+  --ink-2:        oklch(0.72 0.010 250);
+  --ink-3:        oklch(0.58 0.010 250);
+  --line:         oklch(0.30 0.010 250);
+  --line-strong:  oklch(0.40 0.012 250);
+
+  --ok-bg:        oklch(0.28 0.05 152);
+  --warn:         oklch(0.78 0.12 65);
+  --warn-bg:      oklch(0.30 0.05 75);
+  --bad:          oklch(0.72 0.16 27);
+  --bad-bg:       oklch(0.30 0.07 27);
+  --info:         oklch(0.72 0.12 250);
+  --info-bg:      oklch(0.30 0.05 250);
+
+  --shadow-1: 0 1px 2px oklch(0 0 0 / 0.30);
+  --shadow-2: 0 6px 24px oklch(0 0 0 / 0.50);
+
+  --glass:      oklch(0.20 0.013 250 / 0.66);
+  --rim:        oklch(0.40 0.012 250 / 0.7);
+  --sheen-top:  oklch(0.225 0.013 250);
+  --sheen-bot:  oklch(0.205 0.013 250);
+  --edge-hi:    inset 0 1px 0 oklch(1 0 0 / 0.10);
+  --well:       inset 0 1px 2px oklch(0 0 0 / 0.40), inset 0 0 0 1px oklch(0.40 0.012 250 / 0.5);
+  --elev-1:     0 1px 2px oklch(0 0 0 / 0.30), 0 4px 12px oklch(0 0 0 / 0.35);
+  --elev-2:     0 2px 6px oklch(0 0 0 / 0.40), 0 16px 40px oklch(0 0 0 / 0.50);
+  --brand-glow: 0 4px 14px oklch(0.50 0.137 152 / 0.40);
+
+  --ambient:
+    radial-gradient(120% 80% at 50% -10%, oklch(0.70 0.06 250 / 0.10), transparent 60%),
+    radial-gradient(60% 50% at 110% 10%,  oklch(0.60 0.12 152 / 0.10), transparent 70%);
+
+  --hero-ink:    oklch(0.98 0.004 250);
+  color-scheme: dark;
+}
+
+/* ============================== Reset ============================== */
+*, *::before, *::after { box-sizing: border-box; }
+* { margin: 0; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  font-family: var(--font-sans);
+  font-size: var(--t-md);
+  line-height: var(--lh-prose);
+  font-weight: var(--w-body);
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  min-height: 100dvh;
+  font-kerning: normal;
+}
+/* Ambient light field — the environment the glass refracts and catches.
+ * Faint enough to read as "soft light," never as a coloured background. The
+ * gradient is the --ambient token so dark mode can reskin it via the token. */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: var(--ambient);
+}
+h1, h2, h3 { line-height: var(--lh-heading); text-wrap: balance; letter-spacing: 0; margin: 0; }
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--brand-text); text-decoration: none; text-underline-offset: 2px; }
+a:hover { text-decoration: underline; }
+svg { display: block; }
+img { display: block; max-width: 100%; }
+::selection { background: var(--brand-soft); }
+
+/* ============================== A11y ============================== */
+.skip-link {
+  position: absolute; left: -9999px; top: var(--sp-2); z-index: 100;
+  background: var(--surface); color: var(--ink); padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-2); box-shadow: var(--shadow-2);
+}
+.skip-link:focus { left: var(--sp-3); }
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px;
+  margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%);
+  white-space: nowrap; border: 0;
+}
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: var(--r-1); }
+
+/* ============================== App shell ============================== */
+.app {
+  display: grid;
+  /* minmax(0, 1fr) — not plain 1fr — so the main column can shrink below its
+   * content's min-content. Without the 0 floor, a wide .table-wrap keeps its
+   * implicit min-width:auto and pushes the whole page wider than the viewport
+   * instead of scrolling inside its own overflow-x container. */
+  grid-template-columns: var(--sidebar) minmax(0, 1fr);
+  min-height: 100dvh;
+}
+
+/* Sidebar */
+.sidebar {
+  position: sticky; top: 0; height: 100dvh;
+  display: flex; flex-direction: column;
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  border-right: 1px solid var(--rim);
+  box-shadow: var(--edge-hi);
+  padding: var(--sp-4) var(--sp-3);
+}
+.sidebar-head {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-2) var(--sp-5);
+  margin-bottom: var(--sp-2);
+}
+.sidebar-logo {
+  width: 28px; height: 28px; flex: none;
+  background: url("/static/delphee-mark.svg") center / contain no-repeat;
+  background-color: transparent;
+}
+.sidebar-title {
+  font-family: var(--font-display);
+  font-variation-settings: var(--fraunces-head);
+  font-size: var(--t-md);
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.1;
+}
+.sidebar-tag {
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+.sidebar-nav { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: var(--sp-2) 0; }
+/* Each grouped section (Esami / Iscrizione / Documenti) is delimited by a
+ * hairline, matching the sidebar's footer dividers (.sidebar-foot-nav,
+ * .session-block). The group used to lean on a bare margin-bottom, which read
+ * as uneven whitespace with nothing to explain it. A divider makes the grouping
+ * deliberate without an eyebrow label. */
+.sidebar-group {
+  display: flex; flex-direction: column; gap: 2px;
+  border-top: 1px solid var(--line);
+  margin-top: var(--sp-2);
+  padding-top: var(--sp-2);
+}
+.sidebar-group-label {
+  font-size: var(--t-2xs);
+  font-weight: 600;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+  padding: var(--sp-2) var(--sp-3) var(--sp-1);
+}
+/* Nav row — ink-2 → ink on hover, brand-text + brand-soft fill when active.
+ * Active marker is a 2px brand left bar (a navigation semantic, NOT a card
+ * side-stripe). Indented child rows for expandable parent items. */
+.nav-item {
+  position: relative;
+  display: flex; align-items: center; gap: var(--sp-3);
+  width: 100%; padding: var(--sp-2) var(--sp-3);
+  border: none; background: transparent;
+  color: var(--ink-2); font-family: var(--font-sans);
+  font-size: var(--t-md); font-weight: 500; line-height: 1.2;
+  border-radius: var(--r-ctrl); cursor: pointer;
+  text-align: left; text-decoration: none;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.nav-item:hover { color: var(--ink); background: var(--surface-2); }
+.nav-item[aria-current="page"] {
+  color: var(--brand-text);
+  background: var(--brand-soft);
+  font-weight: 600;
+}
+.nav-item[aria-current="page"]::before {
+  content: "";
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 2px; height: 60%; border-radius: 2px;
+  background: var(--brand);
+}
+.nav-item .nav-icon { width: 18px; height: 18px; flex: none; color: currentColor; }
+.nav-item .nav-chevron { margin-left: auto; color: var(--ink-3); transition: transform var(--dur-fast) var(--ease-out); }
+.nav-item.is-expanded .nav-chevron { transform: rotate(90deg); }
+.nav-item.indent { padding-left: calc(var(--sp-5) + 20px); }
+.nav-item.indent .nav-icon { display: none; }
+.nav-item .nav-badge { margin-left: auto; }
+
+/* Session block — single footer row at the bottom of the sidebar/drawer:
+ * student identity on the left, theme + logout actions on the right. */
+.session-block {
+  border-top: 1px solid var(--line);
+  padding-top: var(--sp-3);
+  margin-top: var(--sp-4);
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding-left: var(--sp-2); padding-right: var(--sp-1);
+}
+.session-id { flex: 1; min-width: 0; }
+.session-name {
+  font-size: var(--t-sm);
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.session-matricola {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+.session-actions {
+  display: flex; gap: var(--sp-1);
+  flex: none;
+}
+
+/* On mobile, hide the desktop sidebar entirely and switch the app to a
+ * single column. The hamburger drawer is the navigation surface instead. */
+@media (max-width: 900px) {
+  /* Single column with the mobile top bar in its own auto row; main fills the
+   * rest so the stretch default doesn't balloon the header to half the screen. */
+  .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .sidebar { display: none; }
+}
+
+/* Mobile drawer (slides in from the left, full-height, modal) */
+.drawer-backdrop {
+  position: fixed; inset: 0; z-index: var(--z-overlay);
+  background: oklch(0.16 0.012 250 / 0.5);
+  animation: fade-in var(--dur) var(--ease-out) both;
+}
+.drawer {
+  position: fixed; top: 0; left: 0; bottom: 0; z-index: var(--z-modal);
+  width: min(86vw, 320px);
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  border-right: 1px solid var(--rim);
+  display: flex; flex-direction: column;
+  padding: var(--sp-4) var(--sp-3);
+  animation: drawer-in var(--dur) var(--ease-out) both;
+  box-shadow: var(--elev-2), var(--edge-hi);
+  /* respect the safe area on phones with notches */
+  padding-top: calc(var(--sp-4) + env(safe-area-inset-top));
+  padding-bottom: calc(var(--sp-4) + env(safe-area-inset-bottom));
+}
+.drawer-head {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: 0 var(--sp-2) var(--sp-4);
+  margin-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--line);
+}
+.drawer-head .sidebar-logo { width: 28px; height: 28px; flex: none; background: url("/static/delphee-mark.svg") center / contain no-repeat; background-color: transparent; }
+.drawer-head > div { flex: 1; min-width: 0; }
+.drawer-close { margin-left: auto; }
+.drawer-nav { flex: 1; overflow-y: auto; padding: var(--sp-2) 0; }
+.drawer-foot {
+  border-top: 1px solid var(--line);
+  padding-top: var(--sp-3);
+  display: flex; flex-direction: column; gap: var(--sp-1);
+}
+.drawer-action {
+  justify-content: flex-start;
+  width: 100%;
+  height: 44px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.drawer-action:hover { color: var(--ink); background: var(--surface-2); }
+@keyframes drawer-in {
+  from { transform: translateX(-100%); }
+  to   { transform: none; }
+}
+
+/* Mobile top bar */
+.mobile-top {
+  display: none;
+  position: sticky; top: 0; z-index: var(--z-sticky);
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--rim);
+  box-shadow: var(--edge-hi);
+  padding: var(--sp-3) var(--sp-4);
+  align-items: center; gap: var(--sp-3);
+}
+.mobile-top-logo {
+  width: 28px; height: 28px; flex: none;
+  background: url("/static/delphee-mark.svg") center / contain no-repeat;
+  background-color: transparent;
+}
+.mobile-top-title {
+  font-family: var(--font-display);
+  font-variation-settings: var(--fraunces-head);
+  font-size: var(--t-md);
+  font-weight: 700; flex: 1;
+  line-height: 1.1;
+}
+.mobile-top-actions { display: flex; gap: var(--sp-1); }
+@media (max-width: 900px) {
+  .mobile-top { display: flex; }
+}
+
+/* Main */
+.main {
+  padding: var(--sp-7) var(--sp-6) var(--sp-9);
+  max-width: 100%;
+}
+.main-inner { max-width: var(--maxw); margin: 0 auto; }
+@media (max-width: 720px) {
+  .main { padding: var(--sp-5) var(--sp-4) var(--sp-7); }
+}
+@media (max-width: 900px) {
+  /* No tabbar — just the standard bottom padding. */
+  .main { padding-bottom: var(--sp-7); }
+  /* Refresh lives in the mobile top bar instead of each page head. */
+  .page-actions .btn-refresh { display: none; }
+}
+
+/* ============================== Page header ============================== */
+/* PageHeader — Fraunces 400, opsz 144, -0.01em. The hero size is reserved
+ * for the home greeting; page titles use the same optical preset at --t-2xl
+ * for a calm, consistent reading weight across the product. */
+.page-head {
+  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-6);
+}
+.page-title {
+  font-family: var(--font-display);
+  font-variation-settings: var(--fraunces-hero);
+  font-weight: 500;
+  font-size: var(--t-2xl);
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  color: var(--ink);
+}
+.page-title em { font-style: italic; color: var(--brand-text); }
+.page-sub {
+  margin-top: var(--sp-2);
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  max-width: 60ch;
+  font-family: var(--font-sans);
+}
+.page-actions {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2);
+  flex-shrink: 0;
+}
+.btn-refresh svg { transition: color var(--dur-fast) var(--ease-out); }
+.btn-refresh.spinning svg { animation: spin var(--dur-slow, 0.6s) var(--ease-out); }
+@keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+
+/* ============================== Sub-label / Section ============================== */
+/* SubLabel — a sentence-case title (no eyebrow, no ALL-CAPS) with a hairline
+ * border below. Used to introduce a table/list, often paired with a "Vedi tutti"
+ * right-side action. Spacing: top sp-6, bottom sp-4. */
+.section { margin-bottom: var(--sp-7); }
+.section:last-child { margin-bottom: 0; }
+.section-label {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--sp-4);
+  padding-bottom: var(--sp-2);
+  margin: var(--sp-6) 0 var(--sp-4);
+  border-bottom: 1px solid var(--line);
+}
+.section-label > .label-text {
+  font-family: var(--font-sans);
+  font-size: var(--t-md);
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0;
+}
+.section-label > .label-meta {
+  font-size: var(--t-sm);
+  color: var(--brand-text);
+  font-family: var(--font-sans);
+}
+.section-label > .label-meta.muted { color: var(--ink-3); }
+/* Legacy .section-head (kept for any callers that haven't migrated yet) */
+.section-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--sp-4); margin-bottom: var(--sp-4);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+.section-title {
+  font-family: var(--font-sans);
+  font-size: var(--t-md);
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0;
+}
+.section-meta { color: var(--ink-3); font-size: var(--t-sm); }
+.section + .section { margin-top: var(--sp-6); }
+
+/* ============================== Buttons ============================== */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  padding: 0 var(--sp-4); min-height: 40px;
+  border: 1px solid transparent; border-radius: var(--r-ctrl);
+  font-family: var(--font-sans); font-size: var(--t-sm);
+  font-weight: var(--w-bold); line-height: 1;
+  cursor: pointer; background: transparent; color: var(--ink);
+  transition: background var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-fast) var(--ease-out),
+              transform var(--dur-fast) var(--ease-out);
+  text-decoration: none; white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn:active { transform: scale(0.985); }
+/* Primary — glossy brand pill: vertical sheen, brand glow, inset top light.
+ * Lifts on hover, sinks (recessed) on press. The gradient and glow match
+ * the design system's Button variant=primary. */
+.btn-primary {
+  background: linear-gradient(180deg, oklch(0.55 0.137 152), var(--brand));
+  color: white; border-color: transparent;
+  box-shadow: var(--brand-glow), inset 0 1px 0 oklch(1 0 0 / 0.25);
+}
+.btn-primary:hover {
+  background: linear-gradient(180deg, oklch(0.52 0.137 152), var(--brand-strong));
+  box-shadow: var(--brand-glow), inset 0 1px 0 oklch(1 0 0 / 0.30);
+  transform: translateY(-1px);
+}
+.btn-primary:active {
+  transform: translateY(0) scale(0.99);
+  box-shadow: inset 0 2px 4px oklch(0.32 0.10 152 / 0.45);
+}
+/* Secondary — quiet raised tile. White surface, hairline border, elev-1. */
+.btn-secondary {
+  background: var(--surface);
+  color: var(--ink); border-color: var(--line-strong);
+  box-shadow: var(--elev-1);
+}
+.btn-secondary:hover { transform: translateY(-1px); box-shadow: var(--elev-2); }
+.btn-secondary:active { transform: translateY(0) scale(0.99); box-shadow: var(--well); }
+.btn-ghost { color: var(--ink-2); background: transparent; }
+.btn-ghost:hover { color: var(--ink); background: var(--surface-2); }
+.btn-block { width: 100%; justify-content: center; }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+.btn-sm { min-height: 32px; padding: 0 var(--sp-3); font-size: var(--t-xs); gap: var(--sp-1); }
+.btn-lg { min-height: 48px; padding: 0 var(--sp-5); font-size: var(--t-md); }
+.btn-icon { width: 40px; min-height: 40px; padding: 0; justify-content: center; }
+.btn-icon.btn-sm { width: 32px; min-height: 32px; }
+.btn-icon.btn-lg { width: 44px; min-height: 44px; }
+
+/* ============================== Inputs ============================== */
+.field { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+.field-label {
+  display: block; font-size: var(--t-sm); font-weight: var(--w-medium);
+  color: var(--ink-2); margin-bottom: var(--sp-2);
+}
+.field-hint { font-size: var(--t-sm); color: var(--ink-3); margin-top: var(--sp-2); }
+.field-error { font-size: var(--t-sm); color: var(--bad); margin-top: var(--sp-2); }
+
+.input, .select, .textarea {
+  width: 100%; height: 44px; padding: 0 var(--sp-3);
+  font-family: var(--font-sans); font-size: var(--t-md); font-weight: var(--w-body);
+  /* Recessed well — controls read as pressed into the glass, not floating. */
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line-strong); border-radius: var(--r-ctrl);
+  box-shadow: var(--well);
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.input.mono, .mono-input { font-family: var(--font-mono); font-size: var(--t-sm); letter-spacing: -0.005em; font-variant-numeric: tabular-nums; }
+.input::placeholder { color: var(--ink-3); }
+.input:focus, .select:focus, .textarea:focus {
+  outline: none; border-color: var(--brand);
+  box-shadow: var(--well), 0 0 0 2px var(--brand-soft);
+}
+.input.has-error, .select.has-error { border-color: var(--bad); }
+.input.has-error:focus { box-shadow: var(--well), 0 0 0 2px var(--bad-bg); }
+/* Leading icon — an absolutely-positioned 16px glyph inside a control wrapper.
+ * The input is padded to clear the icon. */
+.input-wrap { position: relative; display: flex; align-items: center; }
+.input-wrap .input { padding-left: calc(var(--sp-3) * 2 + 16px); }
+.input-wrap > .input-icon {
+  position: absolute; left: var(--sp-3); display: inline-flex;
+  color: var(--ink-3); pointer-events: none;
+}
+/* Select chevron — a custom caret because the native one is browser-styled
+ * and inconsistent. The wrapper keeps the native select focusable. */
+.select-wrap { position: relative; display: flex; align-items: center; }
+.select-wrap select.input { appearance: none; -webkit-appearance: none; padding-right: calc(var(--sp-3) * 2 + 8px); cursor: pointer; }
+.select-wrap > .select-caret {
+  position: absolute; right: var(--sp-3); color: var(--ink-3); pointer-events: none;
+}
+
+/* ============================== Filter tray ============================== */
+/* Filter bar — recessed tray on surface-2, hairline border, squircle radius.
+ * Children align to flex-end so labels (when present) line up. */
+.filterbar {
+  display: flex; flex-wrap: wrap; gap: var(--sp-3);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  padding: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  align-items: flex-end;
+}
+/* Field sizing lives on the wrappers (the bar's flex children), not on the
+ * inner controls — an input min-width fighting a narrower field was the source
+ * of the overlap. Search grows but is capped so it can't balloon; selects are
+ * fixed; the button matches the 38px control height so it sits level with them.
+ * Stacking for small screens lives in the shared ≤720px block below. */
+.filterbar .field { margin-bottom: 0; flex: 0 1 auto; min-width: 0; }
+.filterbar .field-label { margin-bottom: 0; }
+.filterbar .field-search { flex: 1 1 220px; max-width: 380px; }
+.filterbar .field-select { flex: 0 0 150px; }
+.filterbar .input, .filterbar .select { height: 38px; min-width: 0; }
+.filterbar .btn { align-self: flex-end; height: 38px; }
+
+/* ============================== Tables ============================== */
+/* DataTable — raised tile container, sentence-case header on surface-2, mono
+ * numerics right-aligned. Sticky header for long lists. */
+.table-wrap {
+  border: 1px solid var(--rim);
+  border-radius: var(--r-card);
+  background: linear-gradient(180deg, var(--sheen-top), var(--sheen-bot));
+  box-shadow: var(--elev-1), var(--edge-hi);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-sans);
+  font-size: var(--t-sm);
+  line-height: var(--lh-row);
+  color: var(--ink);
+}
+table.data th {
+  text-align: left;
+  font-size: var(--t-xs);
+  font-weight: var(--w-bold);
+  color: var(--ink-2);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+  position: sticky; top: 0;
+  text-transform: none;
+  letter-spacing: 0;
+}
+table.data th.num { text-align: right; }
+table.data td {
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+table.data tr:last-child td { border-bottom: none; }
+table.data tbody tr { transition: background var(--dur-fast) var(--ease-out); }
+table.data tbody tr:hover { background: var(--surface-2); }
+td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink-2); letter-spacing: -0.005em; }
+td.mono, th.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.005em; }
+.row-cell-name { display: flex; flex-direction: column; gap: 2px; }
+.row-cell-name strong { font-weight: var(--w-bold); color: var(--ink); }
+.row-cell-name .row-cell-sub { color: var(--ink-3); font-size: var(--t-xs); font-family: var(--font-mono); letter-spacing: -0.005em; }
+
+/* ============================== Status pills ============================== */
+/* StatusPill / .tag — square 5px-radius pill, sentence-case, weight 600.
+ * Status, not decoration. No dot, no ALL-CAPS, no mono. */
+.tag {
+  display: inline-flex; align-items: center;
+  padding: 2px var(--sp-2); border-radius: var(--r-chip);
+  font-family: var(--font-sans); font-size: var(--t-xs);
+  font-weight: var(--w-bold);
+  line-height: 1.5; white-space: nowrap;
+  background: var(--surface-2); color: var(--ink-3);
+  border: 1px solid transparent;
+  letter-spacing: 0;
+}
+.tag-ok { background: var(--ok-bg); color: var(--ok); }
+.tag-warn { background: var(--warn-bg); color: var(--warn); }
+.tag-bad { background: var(--bad-bg); color: var(--bad); }
+.tag-info { background: var(--info-bg); color: var(--info); }
+.tag-muted { background: var(--surface-2); color: var(--ink-2); }
+.tag-brand { background: var(--brand); color: white; }
+.tag-ink { background: var(--ink); color: var(--surface); }
+.tag-solid { /* explicitly solid (filled) variant, for "30 e lode" etc. */ }
+/* The voto chip is mono data, not status — keep its own styling. */
+.voto {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 2px var(--sp-2); border-radius: var(--r-chip);
+  font-family: var(--font-mono); font-size: var(--t-xs); font-weight: var(--w-bold);
+  font-variant-numeric: tabular-nums; min-width: 36px;
+  background: var(--surface-2); color: var(--ink);
+  letter-spacing: -0.005em;
+}
+.voto.lode { background: var(--ok); color: white; }
+.voto.idoneo, .voto.partial { background: var(--ink); color: var(--surface); }
+.voto.fail { background: var(--bad-bg); color: var(--bad); }
+
+/* ============================== Card ============================== */
+/* Card — raised tile (sheen + elev-1 + lit edge + hairline rim). Default
+ * padding is --sp-5; override per-instance for hero/total/rate. The hero
+ * variant (Card hero in the design system) is the riepilogo's stat lozenge:
+ * brand-soft surface, elev-2, brand-text numbers. */
+.card {
+  position: relative;
+  background: linear-gradient(180deg, var(--sheen-top), var(--sheen-bot));
+  border: 1px solid var(--rim);
+  border-radius: var(--r-card);
+  box-shadow: var(--elev-1), var(--edge-hi);
+  padding: var(--sp-5);
+  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.card--hero {
+  background: linear-gradient(180deg, var(--brand-soft), var(--surface));
+  box-shadow: var(--elev-2), var(--edge-hi);
+}
+.card--interactive { cursor: pointer; }
+.card--interactive:hover { transform: translateY(-1px); box-shadow: var(--elev-2), var(--edge-hi); }
+.card--interactive:active { transform: translateY(0) scale(0.99); box-shadow: var(--well); }
+
+/* Stat — the inside-the-hero-lozenge stat (label + big number + sub).
+ * The big number is Fraunces, opsz 144, weight 400 (display, not bold). */
+.stat { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+.stat-label {
+  font-family: var(--font-sans);
+  font-size: var(--t-sm);
+  color: var(--ink-2);
+}
+.stat-value {
+  display: flex; align-items: baseline; gap: var(--sp-2);
+  font-family: var(--font-display);
+  font-variation-settings: var(--fraunces-hero);
+  font-weight: 500;
+  font-size: var(--t-3xl);
+  color: var(--ink);
+  letter-spacing: -0.015em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.stat-sub {
+  font-family: var(--font-mono);
+  font-size: var(--t-md);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
+}
+.stat-row {
+  display: flex; flex-wrap: wrap; gap: var(--sp-7);
+}
+
+/* Anagrafica head card — kept for the dedicated anagrafica screen. */
+.profile-card {
+  background: linear-gradient(180deg, var(--sheen-top), var(--sheen-bot));
+  border: 1px solid var(--rim);
+  border-radius: var(--r-card);
+  box-shadow: var(--elev-1), var(--edge-hi);
+  padding: var(--sp-5);
+  display: flex; gap: var(--sp-5); align-items: center; flex-wrap: wrap;
+}
+.profile-photo {
+  width: 96px; height: 128px; object-fit: cover; flex: none;
+  border-radius: var(--r-ctrl);
+  background: var(--surface-2);
+}
+.profile-body { flex: 1; min-width: 200px; }
+.profile-name {
+  font-family: var(--font-display);
+  font-variation-settings: var(--fraunces-hero);
+  font-size: var(--t-2xl);
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  color: var(--ink);
+}
+.profile-meta { display: flex; flex-wrap: wrap; gap: var(--sp-3); color: var(--ink-2); font-size: var(--t-sm); align-items: center; }
+.profile-meta .meta-key { color: var(--ink-3); }
+
+/* Hero lozenge — the riepilogo's stat container. A Card with brand-soft
+ * surface, three stats in a row, separated by gap (no vertical rules).
+ * This is the design system's <Card hero> + <Stat> composition. */
+.hero-lozenge {
+  display: flex; flex-direction: column;
+  background: linear-gradient(180deg, var(--brand-soft), var(--surface));
+  border: 1px solid var(--rim);
+  border-radius: var(--r-card);
+  box-shadow: var(--elev-2), var(--edge-hi);
+  padding: var(--sp-5) var(--sp-6);
+  margin-bottom: var(--sp-6);
+}
+
+/* Recent exams (mini list) — used on the riepilogo as a quick "ultimi esami"
+ * under the SubLabel, before the "Vedi tutti" link. Renders as a flat list
+ * of rows: date · name · voto. */
+.recent-list { display: flex; flex-direction: column; }
+.recent-row {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--line);
+}
+.recent-row:last-child { border-bottom: none; }
+.recent-row .recent-date { color: var(--ink-3); font-size: var(--t-xs); font-family: var(--font-mono); min-width: 80px; }
+.recent-row .recent-name { flex: 1; }
+.recent-row .recent-name strong { display: block; color: var(--ink); font-weight: 500; }
+.recent-row .recent-name .recent-cfu { color: var(--ink-3); font-size: var(--t-xs); margin-left: var(--sp-2); }
+.recent-row .recent-voto { min-width: 56px; text-align: right; }
+
+/* ============================== Tasse ============================== */
+/* Tasse: anno accademico grouping (kept because the data is grouped by anno).
+ * Anno head: a sentence-case title + a small isee tag + the total on the right.
+ * Under it: a list of rate rendered as Cards. */
+.tasse-anno { margin-bottom: var(--sp-6); }
+.tasse-anno-head {
+  display: flex; align-items: baseline; gap: var(--sp-3);
+  padding-bottom: var(--sp-3); margin-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+.tasse-anno-title {
+  font-family: var(--font-display);
+  font-variation-settings: var(--fraunces-head);
+  font-size: var(--t-lg); font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.tasse-anno-meta { color: var(--ink-3); font-size: var(--t-sm); }
+.tasse-anno-total {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--t-sm); color: var(--ink);
+  letter-spacing: -0.005em;
+}
+
+/* Rata Card — the rate row, a raised Card with the rate name, IUV, importo,
+ * status pill, and a single action (Paga or Ricevuta). Matches the design
+ * system's TasseScreen rate pattern. */
+.rata-list { display: flex; flex-direction: column; gap: var(--sp-3); }
+.rata-card {
+  display: flex; align-items: center; gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
+  flex-wrap: wrap;
+}
+.rata-card .rata-body { flex: 1; min-width: 200px; }
+.rata-card .rata-label {
+  font-size: var(--t-md);
+  font-weight: 500;
+  color: var(--ink);
+}
+.rata-card .rata-meta {
+  display: flex; align-items: center; gap: var(--sp-2);
+  margin-top: 4px;
+}
+.rata-card .rata-iuv {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+  letter-spacing: -0.005em;
+  font-variant-numeric: tabular-nums;
+}
+.rata-card .rata-importo {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--t-lg);
+  color: var(--ink);
+  text-align: right;
+  letter-spacing: -0.005em;
+}
+.rata-card .rata-scadenza {
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+.rata-card .rata-status { display: flex; align-items: center; gap: var(--sp-2); min-width: 100px; justify-content: flex-end; }
+.rata-card .rata-action { flex: none; }
+
+/* Tasse total — the Card at the top showing "Totale dovuto" with a big number
+ * and a status pill on the right. Matches the design system's TasseScreen top. */
+.tasse-total {
+  display: flex; align-items: baseline; justify-content: space-between;
+  flex-wrap: wrap; gap: var(--sp-3);
+  padding: var(--sp-5);
+  margin-bottom: var(--sp-4);
+}
+.tasse-total .tasse-total-label {
+  font-size: var(--t-sm); color: var(--ink-2);
+}
+.tasse-total .tasse-total-value {
+  font-family: var(--font-display);
+  font-variation-settings: var(--fraunces-hero);
+  font-weight: 500;
+  font-size: var(--t-2xl);
+  color: var(--ink);
+  letter-spacing: -0.015em;
+}
+
+/* Bollettino drilldown — the IUV/copy area nested inside a rata card. */
+.bollettino-detail {
+  width: 100%;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-2);
+  border-radius: var(--r-ctrl);
+  margin: var(--sp-3) 0 0;
+  font-size: var(--t-sm);
+  display: flex; flex-wrap: wrap; gap: var(--sp-3) var(--sp-5);
+  color: var(--ink-2);
+}
+.bollettino-detail .bollettino-iuv { font-family: var(--font-mono); font-size: var(--t-xs); color: var(--ink-3); letter-spacing: -0.005em; }
+.bollettino-detail .bollettino-voice { color: var(--ink-2); }
+.bollettino-detail .bollettino-voice strong { color: var(--ink); font-weight: 500; }
+
+/* ============================== List rows (servizi, certificati) ============================== */
+.list-rows {
+  display: flex; flex-direction: column;
+  background: linear-gradient(180deg, var(--sheen-top), var(--sheen-bot));
+  border: 1px solid var(--rim);
+  border-radius: var(--r-3);
+  box-shadow: var(--elev-1), var(--edge-hi);
+  overflow: hidden;
+}
+/* Standalone instruction above a list card (e.g. the certificati print limit).
+ * Readable ink-2, not the borderline muted ink-3, since the user must act on it. */
+.list-note {
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  line-height: 1.5;
+  max-width: 70ch;
+  margin-bottom: var(--sp-4);
+}
+.list-row {
+  display: flex; align-items: center; gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--line);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.list-row:last-child { border-bottom: none; }
+.list-row:hover { background: var(--surface-2); }
+.list-row .list-icon {
+  width: 36px; height: 36px; flex: none;
+  background: var(--brand-soft);
+  color: var(--brand-text);
+  border-radius: var(--r-2);
+  box-shadow: var(--edge-hi);
+  display: grid; place-items: center;
+}
+.list-row .list-icon svg { width: 18px; height: 18px; }
+.list-row .list-body { flex: 1; min-width: 0; }
+.list-row .list-title { font-weight: 600; color: var(--ink); margin-bottom: 2px; }
+.list-row .list-sub { color: var(--ink-3); font-size: var(--t-sm); }
+.list-row .list-action { flex: none; }
+
+/* Code block (inline, not card-with-stripe) */
+.code-value {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-sm);
+  font-variant-numeric: tabular-nums;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-2);
+  border: 1px solid var(--rim);
+  border-radius: var(--r-2);
+  box-shadow: var(--well);
+  color: var(--ink);
+  letter-spacing: 0;
+  word-break: break-all;
+  max-width: 100%;
+}
+.code-value.is-link { color: var(--brand-text); }
+.code-value.is-link:hover { background: var(--brand-soft); }
+.code-row { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.code-label { font-size: var(--t-xs); color: var(--ink-3); }
+
+/* ============================== Definition list ============================== */
+.dl { display: grid; grid-template-columns: minmax(140px, max-content) 1fr; gap: var(--sp-3) var(--sp-5); margin: 0; }
+.dl dt { color: var(--ink-2); font-size: var(--t-sm); }
+.dl dd { color: var(--ink); font-size: var(--t-sm); font-family: var(--font-mono); font-variant-numeric: tabular-nums; margin: 0; }
+@media (max-width: 600px) {
+  .dl { grid-template-columns: 1fr; gap: var(--sp-1) 0; }
+  .dl dt { margin-top: var(--sp-3); }
+  .dl dt:first-child { margin-top: 0; }
+}
+
+/* ============================== Empty ============================== */
+.empty {
+  padding: var(--sp-6) 0;
+  color: var(--ink-2);
+  max-width: 50ch;
+}
+.empty-title { font-weight: 600; color: var(--ink); margin-bottom: var(--sp-1); }
+.empty-hint { font-size: var(--t-sm); color: var(--ink-3); }
+
+/* ============================== Loading ============================== */
+.skeleton {
+  border: 1px solid var(--rim);
+  border-radius: var(--r-3);
+  background: linear-gradient(180deg, var(--sheen-top), var(--sheen-bot));
+  box-shadow: var(--elev-1), var(--edge-hi);
+  overflow: hidden;
+}
+.skel-row {
+  height: 56px; border-bottom: 1px solid var(--line);
+  background: linear-gradient(90deg, var(--surface-2), var(--surface), var(--surface-2));
+  background-size: 200% 100%;
+  animation: shimmer 1.3s ease-in-out infinite;
+}
+.skel-row:last-child { border-bottom: none; }
+.skel-block {
+  height: 80px; border-radius: var(--r-3);
+  background: linear-gradient(90deg, var(--surface-2), var(--surface), var(--surface-2));
+  background-size: 200% 100%;
+  animation: shimmer 1.3s ease-in-out infinite;
+  margin-bottom: var(--sp-3);
+}
+
+/* ============================== Toast ============================== */
+.toast-region {
+  position: fixed; right: var(--sp-5); bottom: var(--sp-5);
+  z-index: var(--z-toast);
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  max-width: calc(100vw - 2 * var(--sp-5));
+}
+.toast {
+  display: flex; align-items: flex-start; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--rim);
+  border-radius: var(--r-3);
+  box-shadow: var(--elev-2), var(--edge-hi);
+  font-size: var(--t-sm);
+  color: var(--ink);
+  min-width: 260px;
+  animation: toast-in var(--dur) var(--ease-out) both;
+  /* Exit: app.js sets opacity 0 before removal — fade it out instead of a pop. */
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.toast .toast-icon { width: 18px; height: 18px; flex: none; margin-top: 1px; }
+.toast.ok .toast-icon { color: var(--ok); }
+.toast.bad .toast-icon { color: var(--bad); }
+.toast.info .toast-icon { color: var(--info); }
+.toast .toast-close { margin-left: auto; background: none; border: none; color: var(--ink-3); cursor: pointer; padding: 2px; }
+.toast .toast-close:hover { color: var(--ink); }
+@media (max-width: 900px) {
+  .toast-region { left: var(--sp-4); right: var(--sp-4); bottom: 80px; }
+  .toast { min-width: 0; }
+}
+
+/* ============================== Login ============================== */
+/* Login — a cinematic brand field. The form markup and interactions remain
+ * unchanged; atmosphere, scale, and contrast belong to this surface alone. */
+.login-page {
+  height: 100dvh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: clamp(28px, 5vh, 64px) var(--sp-6) 32px;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  contain: paint;
+  color-scheme: dark;
+  background:
+    radial-gradient(ellipse at 50% 22%, oklch(0.17 0.035 155), transparent 48%),
+    linear-gradient(145deg, oklch(0.095 0.012 165), oklch(0.07 0.008 190));
+  color: oklch(0.97 0.008 145);
+}
+.login-page::after {
+  content: "";
+  position: fixed; inset: 0; z-index: 2; pointer-events: none;
+  background: url("/static/film-grain.png") repeat;
+  opacity: 0.22;
+  mix-blend-mode: overlay;
+  animation: login-grain 220ms steps(2, end) infinite;
+}
+.login-atmosphere {
+  position: fixed; inset: 0; z-index: -1;
+  overflow: hidden; pointer-events: none;
+}
+.login-atmosphere::after {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center, transparent 22%, oklch(0.035 0.008 165 / 0.62) 100%);
+}
+.login-orb {
+  position: absolute; display: block;
+  width: clamp(260px, 32vw, 620px); aspect-ratio: 1;
+  border-radius: 50%;
+  background: oklch(0.72 0.2 151 / 0.68);
+  filter: blur(clamp(55px, 7vw, 125px));
+  opacity: 0.72; will-change: transform;
+}
+.login-orb--one { left: -10%; top: 52%; animation: orb-one 8s ease-in-out infinite alternate; }
+.login-orb--two { right: -10%; top: 20%; animation: orb-two 10s ease-in-out infinite alternate; }
+.login-orb--three { left: 17%; top: -24%; opacity: 0.58; animation: orb-three 12s ease-in-out infinite alternate; }
+.login-orb--four { right: 25%; bottom: -35%; opacity: 0.34; animation: orb-four 9s ease-in-out infinite alternate; }
+@keyframes orb-one { to { transform: translate(18vw, -14vh) scale(1.12); } }
+@keyframes orb-two { to { transform: translate(-14vw, 22vh) scale(0.82); } }
+@keyframes orb-three { to { transform: translate(24vw, 10vh) scale(1.2); } }
+@keyframes orb-four { to { transform: translate(-18vw, -24vh) scale(1.15); } }
+@keyframes login-grain {
+  0% { background-position: 0 0; }
+  25% { background-position: 31px -47px; }
+  50% { background-position: -53px 19px; }
+  75% { background-position: 17px 61px; }
+  100% { background-position: -29px -23px; }
+}
+.login-wrap {
+  position: relative; z-index: 3;
+  width: min(390px, 100%);
+  max-width: 100%;
+  display: flex; flex-direction: column; align-items: stretch;
+}
+.login-mark {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center;
+  margin-bottom: clamp(34px, 5vh, 54px);
+}
+.login-mark .login-mark-img {
+  width: clamp(52px, 5vw, 72px); height: clamp(52px, 5vw, 72px);
+  background: url("/static/delphee-mark.svg") center / contain no-repeat;
+  background-color: transparent;
+  filter: drop-shadow(0 8px 24px oklch(0.65 0.19 151 / 0.35));
+}
+.login-mark .login-name {
+  font-family: var(--font-display);
+  font-variation-settings: var(--fraunces-hero);
+  font-weight: 700;
+  font-size: clamp(6rem, 15vw, 13rem);
+  color: oklch(0.985 0.008 145);
+  letter-spacing: -0.04em;
+  margin-top: clamp(6px, 1.5vh, 18px);
+  line-height: 0.92;
+  text-shadow: 0 10px 48px oklch(0 0 0 / 0.32);
+  white-space: nowrap;
+  transform: translateX(-0.02em);
+}
+.login-mark .login-sub {
+  font-family: var(--font-sans);
+  font-size: var(--t-md);
+  color: oklch(0.82 0.018 150);
+  letter-spacing: 0.34em;
+  margin-top: clamp(22px, 3vh, 34px);
+}
+.login-form { display: flex; flex-direction: column; gap: var(--sp-4); }
+.login-page .field-label { color: oklch(0.91 0.01 150); }
+.login-page .input {
+  color: oklch(0.97 0.008 145);
+  background: oklch(0.15 0.012 165 / 0.58);
+  border-color: oklch(0.65 0.025 155 / 0.48);
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.045), 0 8px 28px oklch(0 0 0 / 0.16);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+}
+.login-page .input::placeholder { color: oklch(0.68 0.012 155); opacity: 1; }
+.login-page .input:hover { border-color: oklch(0.78 0.04 150 / 0.6); }
+.login-page .input:focus { border-color: oklch(0.72 0.18 151); }
+.login-form .btn { margin-top: var(--sp-1); }
+.login-foot {
+  margin-top: var(--sp-5);
+  font-size: var(--t-sm);
+  color: oklch(0.68 0.014 155);
+  text-align: center;
+  text-wrap: pretty;
+  line-height: 1.5;
+}
+
+@media (max-width: 700px) {
+  .login-page { padding: 28px 20px 26px; }
+  .login-mark { margin-bottom: 34px; }
+  .login-mark .login-name { font-size: clamp(4.5rem, 25vw, 7.5rem); line-height: 0.94; }
+  .login-mark .login-sub { font-size: var(--t-sm); letter-spacing: 0.24em; margin-top: 18px; }
+  .login-orb { width: 78vw; filter: blur(60px); }
+  .login-orb--one { left: -34%; top: 57%; }
+  .login-orb--two { right: -38%; top: 14%; }
+}
+
+@media (max-height: 700px) {
+  .login-page {
+    height: auto; min-height: 100dvh;
+    justify-content: flex-start;
+    overflow: hidden auto;
+  }
+}
+
+@media (max-height: 760px) and (min-width: 701px) {
+  .login-page { padding-top: 24px; }
+  .login-mark { margin-bottom: 28px; }
+  .login-mark .login-mark-img { width: 48px; height: 48px; }
+  .login-mark .login-name { font-size: clamp(6rem, 12vw, 9rem); }
+  .login-mark .login-sub { margin-top: 16px; }
+  .login-foot { margin-top: 18px; }
+}
+
+/* The whole page fades in on first paint. */
+.login-page { animation: fade-in var(--dur) var(--ease-out) both; }
+
+/* Submitting — disable inputs visually (the button cycles staged copy). */
+.login-page--submitting .input { opacity: 0.6; pointer-events: none; }
+
+/* Login progress feedback. The submit is slow (two-step Delphi login, 2s
+ * throttle gaps, retries on 5xx), so the submitting state must read as
+ * "working", never "stuck". One waiting moment, three coordinated cues: an
+ * indeterminate sheen sweeping the CTA, the brand mark breathing a soft glow,
+ * and honest staged copy cycled by app.js. The button stays at full strength
+ * (it is working, not disabled-greyed). Reduced motion drops the sheen + the
+ * breath; the staged copy is a text change, not vestibular motion, so it still
+ * reports progress on its own. */
+.login-page--submitting [data-login-submit] {
+  opacity: 1;
+  cursor: progress;
+  position: relative;
+  overflow: hidden;       /* clip the sheen to the pill's radius */
+  isolation: isolate;
+}
+.login-page--submitting [data-login-submit] .btn-label { position: relative; z-index: 1; }
+.login-page--submitting [data-login-submit]::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(100deg, transparent 20%, oklch(1 0 0 / 0.28) 50%, transparent 80%);
+  transform: translateX(-100%);
+  animation: login-sheen 1.25s linear infinite;
+  pointer-events: none;
+}
+@keyframes login-sheen { to { transform: translateX(100%); } }
+
+.login-page--submitting .login-mark-img {
+  animation: login-mark-breathe 2.6s ease-in-out infinite;
+}
+@keyframes login-mark-breathe {
+  0%, 100% { transform: scale(1);    filter: drop-shadow(0 2px 6px oklch(0.50 0.137 152 / 0.18)); }
+  50%      { transform: scale(1.05); filter: drop-shadow(0 6px 18px oklch(0.50 0.137 152 / 0.5)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-page--submitting [data-login-submit]::after { display: none; }
+  .login-page--submitting .login-mark-img { animation: none; }
+}
+
+/* ============================== Theme toggle ============================== */
+/* Cross-rotate-fade between sun and moon instead of a hard display swap: the
+ * two icons are stacked and the resolved theme cross-fades them. Reduced motion
+ * collapses the transition to an instant swap via the global guard. */
+.theme-toggle { position: relative; }
+.theme-toggle .icon-sun,
+.theme-toggle .icon-moon {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  transition: opacity var(--dur) var(--ease-out), transform var(--dur) var(--ease-out);
+}
+.theme-toggle .icon-sun  { opacity: 1; transform: rotate(0) scale(1); }
+.theme-toggle .icon-moon { opacity: 0; transform: rotate(-90deg) scale(0.6); }
+:root[data-theme="dark"] .theme-toggle .icon-sun  { opacity: 0; transform: rotate(90deg) scale(0.6); }
+:root[data-theme="dark"] .theme-toggle .icon-moon { opacity: 1; transform: rotate(0) scale(1); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-toggle .icon-sun  { opacity: 0; transform: rotate(90deg) scale(0.6); }
+  :root:not([data-theme="light"]) .theme-toggle .icon-moon { opacity: 1; transform: rotate(0) scale(1); }
+}
+
+/* ============================== Sliding nav indicator ============================== */
+/* The active-row "green" is a single pill that glides between items rather than
+ * cutting from one row to the next. It owns the brand-soft fill + the 2px brand
+ * bar; the per-item active styling keeps only the text colour/weight so the two
+ * never double up. Drawer rows are untouched (no indicator there). */
+.sidebar .sidebar-nav { position: relative; }
+.sidebar .sidebar-nav .nav-item { position: relative; z-index: 1; }
+.sidebar .sidebar-nav .nav-item[aria-current="page"] { background: transparent; }
+.sidebar .sidebar-nav .nav-item[aria-current="page"]::before { display: none; }
+.nav-indicator {
+  position: absolute; left: 0; right: 0; top: 0; height: 0;
+  z-index: 0; pointer-events: none; opacity: 0;
+  border-radius: var(--r-ctrl);
+  background: var(--brand-soft);
+  transform: translateY(0);
+  transition:
+    transform var(--dur) var(--ease-out),
+    height var(--dur) var(--ease-out),
+    background var(--dur) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
+}
+.nav-indicator.is-placed { opacity: 1; }
+.nav-indicator::before {
+  content: ""; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 2px; height: 60%; border-radius: 2px; background: var(--brand);
+}
+
+/* ============================== Animations ============================== */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+@keyframes row-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+.fade-in { animation: fade-in var(--dur) var(--ease-out) both; }
+.row-in { animation: row-in var(--dur) var(--ease-out) both; }
+
+/* ============================== Utilities ============================== */
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--ink-3); }
+.flex-row { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.gap-2 { gap: var(--sp-2); }
+.text-end { text-align: right; }
+.mt-3 { margin-top: var(--sp-3); }
+.mt-4 { margin-top: var(--sp-4); }
+.mt-5 { margin-top: var(--sp-5); }
+.mt-6 { margin-top: var(--sp-6); }
+.mb-3 { margin-bottom: var(--sp-3); }
+.mb-4 { margin-bottom: var(--sp-4); }
+
+/* ============================== Mobile polish (< 720px) ============================== */
+@media (max-width: 720px) {
+  /* Page title: 32 -> 26, keeps balance, never overflows */
+  .page-title { font-size: 1.625rem; }
+  .page-head { margin-bottom: var(--sp-5); }
+
+  /* Hero lozenge: stat row becomes 1 col on narrow screens */
+  .hero-lozenge { padding: var(--sp-4); }
+  .stat-row { gap: var(--sp-5); }
+  .stat-value { font-size: 2.25rem; }
+
+  /* Recent esami rows: tighter, allow wrap */
+  .recent-row { flex-wrap: wrap; row-gap: var(--sp-1); }
+  .recent-row .recent-date { min-width: 0; flex: 0 0 100%; }
+  .recent-row .recent-name { flex: 1 0 calc(100% - 60px); }
+  .recent-row .recent-voto { min-width: 0; }
+
+  /* Tables: switch to card list at narrow width. The table is still
+     rendered in JS so the dataTable() helper doesn't need a separate
+     code path; we just restyle cells as stacked cards on mobile. */
+  .table-wrap {
+    border: none; border-radius: 0; background: transparent;
+  }
+  table.data, table.data thead, table.data tbody, table.data tr, table.data td { display: block; }
+  table.data thead { display: none; }
+  table.data { width: 100%; }
+  table.data tr {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-card);
+    padding: var(--sp-3) var(--sp-4);
+    margin-bottom: var(--sp-3);
+  }
+  table.data td {
+    border-bottom: 1px solid var(--line);
+    padding: var(--sp-2) 0;
+    display: flex; justify-content: space-between; align-items: baseline;
+    gap: var(--sp-3);
+  }
+  table.data td:last-child { border-bottom: none; padding-bottom: 0; }
+  table.data td::before {
+    content: attr(data-label);
+    font-size: var(--t-xs); color: var(--ink-3); font-weight: 500;
+    flex: 0 0 auto;
+    text-transform: none; letter-spacing: 0;
+  }
+  table.data td.num, table.data td.mono { text-align: right; font-family: inherit; font-variant-numeric: tabular-nums; }
+
+  /* Page actions stack under the title on mobile */
+  .page-head { flex-direction: column; align-items: flex-start; }
+  .page-actions { width: 100%; }
+
+  /* Section label: stack */
+  .section-label { flex-direction: column; align-items: flex-start; gap: var(--sp-2); }
+  .section-head { flex-direction: column; align-items: flex-start; gap: var(--sp-2); }
+
+  /* Tasse: keep the timeline readable on small screens */
+  .tasse-anno-title { font-size: var(--t-lg); }
+
+  /* Filter bar: full-width controls stacked */
+  .filterbar { padding: var(--sp-2); gap: var(--sp-2); }
+  .filterbar .field { flex: 1 1 100%; max-width: none; }
+  .filterbar .btn { width: 100%; }
+
+  /* Anagrafica head card */
+  .profile-photo { width: 72px; height: 96px; }
+  .profile-name { font-size: var(--t-xl); }
+  .profile-meta { font-size: var(--t-xs); }
+
+  /* Rata card: stack on very narrow screens */
+  .rata-card { flex-direction: column; align-items: flex-start; }
+  .rata-card .rata-status { justify-content: flex-start; min-width: 0; }
+  .rata-card .rata-importo { text-align: left; }
+  .rata-card .rata-action { width: 100%; }
+}
+
+/* Very small screens: get even more compact */
+@media (max-width: 380px) {
+  .page-title { font-size: 1.5rem; }
+}
+
+/* ============================== Menu footer + login links ============================== */
+/* The last navigational section of the side menu: real links (repo, about,
+ * privacy) styled as nav rows, separated from the data tabs by a hairline. */
+.sidebar-foot-nav {
+  display: flex; flex-direction: column; gap: 2px;
+  border-top: 1px solid var(--line);
+  padding-top: var(--sp-2); margin-top: var(--sp-2);
+}
+.nav-link .nav-link-ext { margin-left: auto; color: var(--ink-3); display: flex; }
+.nav-link:hover .nav-link-ext { color: var(--ink-2); }
+
+/* External/legal links under the login form. */
+.login-links {
+  display: flex; justify-content: center; flex-wrap: wrap;
+  gap: var(--sp-4); margin-top: var(--sp-4);
+}
+.login-links a {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: oklch(0.76 0.014 155); text-decoration: none; font-size: var(--t-sm);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.login-links a:hover { color: oklch(0.98 0.008 145); }
+.login-links svg { color: oklch(0.68 0.014 155); }
+
+/* ============================== Doc pages ============================== */
+/* Standalone themed content pages (privacy, sul progetto): served outside the
+ * SPA so they're readable pre-login and on their own URL. Reuse the tokens and
+ * theme; no app.js. A reading column, generous rhythm, display headings. */
+.doc-body { min-height: 100dvh; display: flex; flex-direction: column; background: var(--bg); }
+.doc-head {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--rim);
+}
+.doc-back {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  color: var(--ink); text-decoration: none; font-weight: 600;
+}
+.doc-back svg { color: var(--ink-2); }
+.doc-back .doc-brand {
+  font-family: var(--font-display);
+  font-variation-settings: var(--fraunces-head);
+}
+.doc-main { flex: 1; width: 100%; max-width: 720px; margin: 0 auto; padding: var(--sp-7) var(--sp-5) var(--sp-8); }
+.doc { color: var(--ink-2); font-size: var(--t-md); line-height: 1.7; }
+.doc h1 {
+  font-family: var(--font-display);
+  font-variation-settings: var(--fraunces-hero);
+  font-weight: 700; font-size: var(--t-3xl); color: var(--ink);
+  line-height: 1.1; letter-spacing: -0.015em; margin-bottom: var(--sp-3);
+}
+.doc .doc-lead { font-size: var(--t-lg); color: var(--ink); margin-bottom: var(--sp-6); text-wrap: pretty; }
+.doc .doc-meta { margin-top: calc(-1 * var(--sp-2)); margin-bottom: var(--sp-6); font-size: var(--t-sm); color: var(--ink-3); }
+.doc h2 {
+  font-family: var(--font-display);
+  font-variation-settings: var(--fraunces-head);
+  font-weight: 600; font-size: var(--t-xl); color: var(--ink);
+  margin-top: var(--sp-7); margin-bottom: var(--sp-3);
+}
+.doc p { margin-bottom: var(--sp-4); text-wrap: pretty; }
+.doc ul { margin: 0 0 var(--sp-4) var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-2); }
+.doc li { padding-left: var(--sp-1); }
+.doc strong { color: var(--ink); font-weight: 600; }
+.doc a { color: var(--brand-text); text-decoration: underline; text-underline-offset: 2px; }
+.doc a:hover { color: var(--brand-strong); }
+.doc code {
+  font-family: var(--font-mono); font-size: var(--t-sm);
+  background: var(--surface-2); padding: 1px 6px; border-radius: 6px;
+}
+.doc-foot {
+  display: flex; gap: var(--sp-5); flex-wrap: wrap;
+  margin-top: var(--sp-8); padding-top: var(--sp-5);
+  border-top: 1px solid var(--line); font-size: var(--t-sm);
+}
+.doc-foot a { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); text-decoration: none; }
+.doc-foot a:hover { color: var(--ink); }
+@media (max-width: 520px) {
+  .doc-main { padding: var(--sp-6) var(--sp-4) var(--sp-7); }
+  .doc h1 { font-size: var(--t-2xl); }
+}
+
+/* ============================== Reduced motion ============================== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .skel-row, .skel-block { animation: none; }
+}

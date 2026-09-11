@@ -1,0 +1,10 @@
+import { chromium } from "playwright-core";
+const EXE = "/home/fabio/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome";
+const browser = await chromium.launch({ executablePath: EXE });
+const ctx = await browser.newContext({ viewport: { width: 1200, height: 800 }, deviceScaleFactor: 2 });
+const page = await ctx.newPage();
+await page.goto("http://localhost:7821/", { waitUntil: "networkidle" });
+await page.waitForTimeout(700);
+await page.screenshot({ path: "shots/login-light.png" });
+console.log("wrote shots/login-light.png");
+await browser.close();
