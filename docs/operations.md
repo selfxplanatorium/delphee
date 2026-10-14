@@ -100,7 +100,9 @@ The clean Docker image build has been verified. Compose still requires a local
 
 ## Run behind a trusted edge
 
-Delphee listens with plain HTTP. For access beyond the local machine, place it behind a service that provides TLS and access controls.
+Delphee listens with plain HTTP on every network interface, not only on `localhost`. Anyone who can reach the host on the port can reach the login endpoint. The Compose file avoids this by binding to `127.0.0.1`. For `npm run dev` and `npm start`, restrict the port with a firewall or put the process behind an edge as described below.
+
+For access beyond the local machine, place it behind a service that provides TLS and access controls.
 
 At minimum:
 

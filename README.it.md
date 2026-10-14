@@ -17,12 +17,18 @@ Il progetto include anche una piccola interfaccia web e un account demo offline.
 
 - Profilo dello studente e carriera universitaria
 - Esami, esami pendenti, verbali aperti e appelli
-- Piano di studi
-- Tasse, pagamenti e ricevute PDF
+- Prenotazioni d'esame con dettagli, ricevute, scheda per ogni esame ed esportazione nel calendario
+- Programmi dei corsi e corsi aperti all'iscrizione
+- Piano di studi, con gli esami del piano corrente letti dal PDF e il compositore GOMP nel browser
+- Tasse, pagamenti, ricevute PDF e stato dell'autorizzazione ISEE-U
+- Ristampa della domanda di iscrizione e certificati stampabili in PDF
+- Statistiche: media ponderata, previsione di laurea, voto obiettivo, storico dei tentativi, percorso di carriera e lista per la laurea
+- Pianificatore di sessione: un appello proposto per ogni esame mancante, con esportazione nel calendario
 - Servizi per gli studenti e codici di attivazione
-- Certificati stampabili in PDF
 - Un'interfaccia web per consultare gli stessi dati
 - Una demo offline che non contatta Delphi
+
+L'API JSON legge soltanto da Delphi. Il mirror GOMP inoltra le richieste del browser a GOMP, quindi le modifiche fatte nel compositore dei piani sono reali.
 
 Delphee dipende dalle pagine HTML di Delphi. Una modifica al portale può interrompere una o più funzioni.
 

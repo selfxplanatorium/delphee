@@ -28,12 +28,18 @@ grade, and identifier shown is sample data.
 
 - Student profile and academic record
 - Exam records, pending exams, open records, and exam sessions
-- Study plans
-- Fees, payment details, and receipt PDFs
+- Exam bookings with details, receipts, a per-exam dossier, and calendar export
+- Course syllabi and the courses open for enrolment
+- Study plans, with the exams of the current plan read from its PDF, and the GOMP plan composer in the browser
+- Fees, payment details, receipt PDFs, and ISEE-U authorization status
+- Enrolment application reprint and printable certificate PDFs
+- Statistics: weighted average, graduation forecast, target grade, attempt history, career timeline, and graduation checklist
+- Session planner: one proposed sitting per missing exam, with calendar export
 - Student services and activation codes
-- Printable certificate PDFs
 - A browser interface for the same data
 - An offline demo that does not contact Delphi
+
+The JSON API only reads from Delphi. The GOMP mirror forwards the browser's requests to GOMP, so changes made in the plan composer are real.
 
 Delphee depends on Delphi's HTML pages. A portal change can break one or more features.
 

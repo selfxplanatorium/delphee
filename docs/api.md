@@ -73,14 +73,27 @@ These routes require a valid bearer token or session cookie.
 | `GET` | `/anagrafica` | `Anagrafica` |
 | `GET` | `/carriera` | `CarrieraResponse` |
 | `GET` | `/carriera/esami` | Filtered `EsamiResponse` |
+| `GET` | `/carriera/insights` | `CarrieraInsights` |
+| `GET` | `/carriera/sessione` | `PianoSessione` |
+| `GET` | `/carriera/sessione.ics` | Planned exam sessions as iCalendar |
 | `GET` | `/appelli` | `AppelloCalendario[]` or `Appello[]` |
 | `GET` | `/piano` | `Piano` |
+| `GET` | `/piano/pdf` | Study plan PDF from GOMP |
 | `GET` | `/tasse` | `SituazioneTasse` |
 | `GET` | `/servizi` | `ServiziResponse` |
 | `GET` | `/servizi/genera` | `{ "code": string | null }` |
 | `GET` | `/certificati` | `CertificatiResponse` |
 | `GET` | `/verbali` | `VerbaliResponse` |
 | `GET` | `/esami-pendenti` | `EsamiPendentiResponse` |
+| `GET` | `/prenotazioni` | `PrenotazioniResponse` |
+| `GET` | `/prenotazioni/dettaglio` | `PrenotazioneDettaglio` |
+| `GET` | `/prenotazioni/dossier` | Booking details with past attempts and syllabus |
+| `GET` | `/prenotazioni/ricevuta` | Booking receipt PDF |
+| `GET` | `/prenotazioni/calendario.ics` | Upcoming bookings as iCalendar |
+| `GET` | `/tasse/isee` | `IseeResponse` |
+| `GET` | `/corsi` | `CorsiResponse` |
+| `GET` | `/appelli/info` | `InfoInsegnamento` |
+| `GET` | `/iscrizione/domanda` | Enrolment application PDF |
 | `GET` | `/tasse/ricevuta` | Receipt PDF |
 | `GET` | `/certificati/stampa` | Certificate PDF |
 
@@ -129,6 +142,83 @@ It requires both parameters:
 
 Both values must be `/totem/*.jsp` paths. The request changes state in Delphi even though the current HTTP method is `GET`. Call it only after an explicit user action.
 
+### Read exam bookings
+
+`GET /prenotazioni` lists every exam booking, active and past. Each entry carries a `ref` object with `id`, `index`, and `ordine`.
+
+`GET /prenotazioni/dettaglio` and `GET /prenotazioni/ricevuta` require those three `ref` values as query parameters. They return the booking's room, time, and modules, or the booking receipt PDF. Non-numeric values return `400 invalid_prenotazione`.
+
+`GET /prenotazioni/calendario.ics` returns every booking whose exam date is today or later as an iCalendar file. Events with a known start time are in Europe/Rome time and last two hours, because Delphi publishes no end time. Bookings without a time become all-day events.
+
+Booking and cancelling exams are not implemented.
+
+`GET /prenotazioni/dossier` takes the same `ref` values and returns everything about one booking in one response:
+
+- `dettaglio`: the booking details described above
+- `tentativi`: earlier attempts at the same exam, or `null`
+- `info`: the course syllabus, or `null` when none is found
+- `giorni`: days until the exam, or `null` when there is no exam date
+
+The `tentativi` and `info` parts are best-effort. Failures in them leave those fields empty and do not fail the request.
+
+### Download a study plan
+
+`GET /piano/pdf` requires `ps`, the plan id returned in `/piano`'s `piani` entries. Delphee opens a GOMP session for the request and streams the plan PDF. A value that is not a UUID returns `400 invalid_piano`.
+
+`GET /piano` reads the exams of the current plan from that PDF. "Current" is the newest submitted plan, so a plan awaiting approval takes precedence over an older approved one. Each exam in `esami` has `stato` (`superato`, `in_corso`, or `da_fare`, matched to the exam record by code), `ssd`, `taf` (the activity type letter), and `gruppo` (the plan section, such as `Insegnamenti obbligatori` or an elective group). `esamiDa` names the plan the exams came from. If the PDF cannot be read, `esami` is empty and the plan list is still returned.
+
+### Study-plan insights
+
+`GET /carriera/insights` combines the exam record with the study plan, bookings, fees, ISEE authorization and profile. Only the exam record is required. The other sources are best-effort and contribute nothing when they fail. The response has these sections:
+
+| Field | Content |
+| --- | --- |
+| `progresso` | Credits earned and remaining, from the plan when available |
+| `media` | Weighted average and degree base (on 110), grade distribution, and the running average |
+| `perAnno` | Credits and exam count per academic year |
+| `previsione` | Graduation forecast from the recent pace, with `inCorso` telling whether the forecast falls within the normal course length |
+| `obiettivo` | Remaining graded credits, for the target-grade calculation |
+| `tentativi` | Attempts per exam, linked to bookings through the record number |
+| `timeline` | Dated events of the career, newest last |
+| `checklist` | Open items before graduation, with the status of each |
+| `gruppiScelta` | Elective groups of the plan |
+
+The academic year starts on 1 November. A booking with no matching grade is reported as `senza_esito`. Delphi does not say whether that was a withdrawal, an absence or a failure.
+
+Calls with `?refresh=1` drop the cached sources this response is built from.
+
+### Session planner
+
+`GET /carriera/sessione` proposes one sitting per exam still missing from the plan, drawn from the calendars of the previous and the current academic year. Heavier exams are spaced further apart. Booked exams keep their date. The response is a `PianoSessione`:
+
+| Field | Content |
+| --- | --- |
+| `da`, `a` | Planning window: today and about five months ahead |
+| `pianificati` | One entry per exam: chosen sitting, alternative dates, booking state, and `ravvicinato` when the exam sits close to another |
+| `senzaAppello` | Exams with no sitting in the window |
+
+The query parameter `escludi` takes a comma-separated list of exam codes to leave out of the plan.
+
+`GET /carriera/sessione.ics` returns the same planned sittings as an iCalendar file. Accepts the same `escludi` parameter.
+
+### Read a course syllabus
+
+`GET /appelli/info` requires `idCorIns`, the course id returned by the `/appelli` calendar search. It returns the objectives, prerequisites, teaching and assessment methods, and programme that the teacher published. Each module of the course has its own programme. Fields the teacher left empty are `null`. A non-numeric id returns `400 invalid_insegnamento`.
+
+### List courses open for enrolment
+
+`GET /corsi` lists the courses the student can enrol in under "Frequenza corsi di insegnamento". Delphi asks for a contact email first. Delphee resubmits the address Delphi already has on record, so the account does not change. Only the first results page is read.
+
+Enrolling is not implemented. Each entry's `id` is Delphi's enrolment id, returned for reference only.
+
+### Reprint the enrolment application
+
+`GET /iscrizione/domanda` returns the latest enrolment application ("domanda di iscrizione") as a PDF.
+
+### Read ISEE authorization
+
+`GET /tasse/isee` lists the ISEE-U authorizations per academic year. Accounts without that Delphi page receive an empty list.
+
 ### Download a receipt
 
 `GET /tasse/ricevuta` requires `bollettinoId`. It also accepts the optional `rataId` and `aa` values returned by `/tasse`.
@@ -148,6 +238,14 @@ The server accepts only relative `.jsp` paths made of letters, digits, underscor
 The proxy does not cache responses, apply the normal upstream delay, retry failed requests, or rewrite response bodies. It rewrites same-origin redirect locations so navigation remains on the Delphee origin.
 
 This route exists for browser pages that cannot be represented by the JSON API. It is not a general-purpose proxy.
+
+## GOMP mirror
+
+GOMP hosts the study-plan composer. Delphee serves GOMP's pages on its own origin under these paths: `/WorkFlow2011/*`, `/Questionari/*`, `/Scripts/*`, `/CSS/*`, `/images/*`, `/ig_res/*`, `/ScriptResource.axd`, and `/WebResource.axd`. Start at `/WorkFlow2011/Studenti/Composer/ElencoPiani.aspx`.
+
+Authentication works like `/totem/*`. Delphee opens the GOMP session through Delphi's single sign-on on first use, keeps the GOMP cookies on the server, and opens a new GOMP session when GOMP sends a GET to a login page. Response bodies are not rewritten. Redirects to GOMP or Delphi become local paths.
+
+The composer is GOMP's own interface. Delphee has no JSON API for creating or changing plans. Building one needs an account whose plan window is open and that has not yet submitted a plan for the year, so tests have no consequences. Contributions from someone who can offer such an account are welcome.
 
 ## Cache status
 
@@ -175,6 +273,9 @@ Error responses use a short JSON object:
 | `400` | `missing_bollettinoId` | Receipt ID is missing |
 | `400` | `missing_path` | Certificate path is missing |
 | `400` | `invalid_path` | Certificate or service path is not allowed |
+| `400` | `invalid_insegnamento` | Course id is missing or not numeric |
+| `400` | `invalid_piano` | Study plan id is missing or not a UUID |
+| `400` | `invalid_prenotazione` | Booking reference is missing or not numeric |
 | `401` | `no_session` | Token is missing, unknown, or expired |
 | `401` | `invalid_credentials` | Delphi rejected the credentials |
 | `429` | `rate_limited` | The process-wide login limit was reached |
