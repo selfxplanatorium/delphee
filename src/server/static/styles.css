@@ -125,6 +125,10 @@
   --dur-slow: 280ms;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 
+  /* Chart marks: the brand hue, one step stronger in dark mode so it stays
+     inside the validated lightness band against the dark surface. */
+  --chart-mark: var(--brand);
+
   --maxw: 880px;
   --sidebar: 240px;
   color-scheme: light;
@@ -132,6 +136,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    --chart-mark: oklch(0.58 0.14 152);
     --brand-strong: oklch(0.58 0.14 152);
     --brand-text:   oklch(0.74 0.14 152);
     --brand-soft:   oklch(0.28 0.05 152);
@@ -175,6 +180,7 @@
   }
 }
 :root[data-theme="dark"] {
+  --chart-mark: oklch(0.58 0.14 152);
   --brand-strong: oklch(0.58 0.14 152);
   --brand-text:   oklch(0.74 0.14 152);
   --brand-soft:   oklch(0.28 0.05 152);
@@ -1047,6 +1053,90 @@ td.mono, th.mono { font-family: var(--font-mono); font-variant-numeric: tabular-
   .dl dt:first-child { margin-top: 0; }
 }
 
+/* Long teacher-written text (course syllabus): body font, kept line breaks. */
+.dl-prose dd { font-family: inherit; font-variant-numeric: normal; line-height: 1.55; white-space: pre-line; }
+
+/* Home: "In arrivo" rows are links to the matching view. */
+.upcoming-row { color: inherit; text-decoration: none; cursor: pointer; }
+
+/* Home: grade simulator. */
+.sim-card { padding: var(--sp-5); }
+.sim-result { margin-bottom: var(--sp-5); }
+.sim-rows { display: flex; flex-direction: column; gap: var(--sp-3); }
+.sim-row { display: grid; grid-template-columns: minmax(0, 1fr) 5.5rem 6.5rem auto; gap: var(--sp-3); align-items: center; }
+.sim-card .list-note { margin: var(--sp-4) 0 0; }
+@media (max-width: 600px) {
+  .sim-row { grid-template-columns: minmax(0, 1fr) 4.5rem 5.5rem; }
+  .sim-row > :first-child { grid-column: 1 / -1; }
+  .sim-row > button { grid-column: 1 / -1; justify-self: start; }
+}
+
+/* ============================== Charts ============================== */
+/* Statistiche charts. Marks: --chart-mark (brand) and --ink-3 (reference
+   lines); 2px lines, 1px solid grid, surface ring on dots, text in ink tokens.
+   A dashed line means "projected". */
+.chart { margin: 0 0 var(--sp-6); }
+.chart-title { font-size: var(--t-sm); font-weight: 600; color: var(--ink); margin-bottom: var(--sp-2); }
+.chart-legend { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); font-size: var(--t-xs); color: var(--ink-2); margin-bottom: var(--sp-2); }
+.chart-key { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.chart-swatch { display: inline-block; width: 16px; height: 0; border-top: 2px solid var(--key); }
+.chart-swatch.dash { border-top-style: dashed; }
+.chart-swatch.dot { width: 8px; height: 8px; border: 0; border-radius: 50%; background: var(--key); }
+.chart-plot { position: relative; }
+.chart-svg { display: block; width: 100%; height: auto; overflow: visible; outline: none; }
+.chart-svg:focus-visible { outline: 2px solid var(--brand); outline-offset: 4px; border-radius: 4px; }
+.chart-grid { stroke: var(--line); stroke-width: 1; }
+.chart-axis { fill: var(--ink-3); font-size: 11px; font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+.chart-end, .chart-cap { fill: var(--ink-2); font-size: 11px; font-family: var(--font-sans); }
+.chart-line { fill: none; stroke: var(--mark); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart-line.is-dashed { stroke-dasharray: 5 4; }
+.chart-dot { fill: var(--mark); stroke: var(--surface); stroke-width: 2; }
+.chart-bar { fill: var(--mark); transition: opacity var(--dur-fast) var(--ease-out); }
+.chart-hit { fill: transparent; }
+.chart-col { outline: none; }
+.chart-col:hover .chart-bar, .chart-col:focus-visible .chart-bar { opacity: 0.75; }
+.chart-cross { stroke: var(--line-strong); stroke-width: 1; }
+.chart-tip {
+  position: absolute; z-index: 2; pointer-events: none; min-width: 140px; max-width: 260px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-ctrl);
+  box-shadow: var(--shadow-2); padding: var(--sp-2) var(--sp-3); font-size: var(--t-xs); color: var(--ink-2);
+}
+.chart-tip-head { color: var(--ink-3); margin-bottom: var(--sp-1); }
+.chart-tip-row { display: flex; align-items: baseline; gap: var(--sp-2); }
+.chart-tip-row strong { color: var(--ink); font-size: var(--t-sm); font-variant-numeric: tabular-nums; }
+.chart-tip-key { flex: none; width: 12px; height: 0; border-top: 2px solid var(--key); transform: translateY(-3px); }
+.chart-tip-key.dash { border-top-style: dashed; }
+.chart-tip-key.dot { width: 8px; height: 8px; border: 0; border-radius: 50%; background: var(--key); transform: none; }
+.chart-tip-key.bar { width: 8px; height: 10px; border: 0; border-radius: 2px; background: var(--key); transform: none; }
+.chart-table { margin-top: var(--sp-2); font-size: var(--t-sm); }
+.chart-table summary { cursor: pointer; color: var(--ink-3); font-size: var(--t-xs); }
+.chart-table .table-wrap { margin-top: var(--sp-2); }
+.chart-grid-2 { display: grid; grid-template-columns: 1fr; }
+
+/* Statistiche text and meter. */
+.stats-text { color: var(--ink-2); line-height: 1.55; max-width: 70ch; margin: 0 0 var(--sp-3); }
+.stats-big { font-size: var(--t-lg, 1.25rem); color: var(--ink); }
+.stats-target-result { margin-bottom: var(--sp-4); color: var(--ink-2); }
+.stats-target-result strong { color: var(--ink); }
+.sim-card label .input { width: 6rem; }
+.meter { height: 8px; border-radius: 999px; background: var(--brand-soft); overflow: hidden; }
+.meter-fill { height: 100%; border-radius: 999px; background: var(--chart-mark); }
+
+/* Career timeline, newest first. */
+.timeline-year { margin-bottom: var(--sp-5); }
+.timeline-aa { font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: var(--sp-2); }
+.timeline { list-style: none; margin: 0; padding: 0 0 0 var(--sp-4); border-left: 1px solid var(--line); }
+.timeline-item { position: relative; display: grid; grid-template-columns: 6.5rem 7rem 1fr; gap: var(--sp-3); padding: var(--sp-2) 0; font-size: var(--t-sm); }
+.timeline-item::before { content: ""; position: absolute; left: calc(-1 * var(--sp-4) - 4px); top: 0.85em; width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); box-shadow: 0 0 0 2px var(--bg); }
+.timeline-item.is-esame::before, .timeline-item.is-immatricolazione::before { background: var(--chart-mark); }
+.timeline-item.is-fallito::before { background: var(--bad); }
+.timeline-item.is-assenza::before { background: var(--warn); }
+.timeline-date { color: var(--ink-3); font-size: var(--t-xs); }
+.timeline-type { color: var(--ink-2); }
+@media (max-width: 600px) {
+  .timeline-item { grid-template-columns: 1fr; gap: 0; }
+}
+
 /* ============================== Empty ============================== */
 .empty {
   padding: var(--sp-6) 0;
@@ -1341,10 +1431,6 @@ td.mono, th.mono { font-family: var(--font-mono); font-variant-numeric: tabular-
     opacity var(--dur-fast) var(--ease-out);
 }
 .nav-indicator.is-placed { opacity: 1; }
-.nav-indicator::before {
-  content: ""; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
-  width: 2px; height: 60%; border-radius: 2px; background: var(--brand);
-}
 
 /* ============================== Animations ============================== */
 @keyframes fade-in {

@@ -5,7 +5,7 @@
 // no innerHTML injection of server data. Errors map to Italian via describeError;
 // X-Cache-Stale surfaces as a per-page tag.
 
-const NAV = ["riepilogo", "esami", "verbali", "pendenti", "piano", "appelli", "tasse", "certificati", "servizi", "anagrafica"];
+const NAV = ["riepilogo", "statistiche", "sessione", "esami", "verbali", "pendenti", "prenotazioni", "piano", "appelli", "corsi", "tasse", "certificati", "servizi", "anagrafica"];
 
 const state = {
   matricola: "",
@@ -18,19 +18,30 @@ const state = {
   carrieraStale: false,
   esamiFilter: { nome: "", ssd: "", aa: "", stato: "" },
   appelliFilter: { anno: "", sessione: "TUTTE" },
+  // Grade simulator rows ({ nome, cfu, voto }); in memory only.
+  sim: null,
+  sessioneEscludi: new Map(),
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
 /* ---------------------------- helpers ---------------------------- */
+function setStyles(node, styles) {
+  for (const [p, val] of Object.entries(styles)) {
+    if (p.startsWith("--")) node.style.setProperty(p, val);
+    else node.style[p] = val;
+  }
+}
 function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
     if (v == null || v === false) continue;
     if (k === "class") node.className = v;
     else if (k === "html") node.innerHTML = v;
-    else if (k === "style" && typeof v === "object") Object.assign(node.style, v);
+    // Through the CSSOM: the page's CSP blocks style attributes, and custom
+    // properties (--x) only take effect via setProperty.
+    else if (k === "style" && typeof v === "object") setStyles(node, v);
     else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2).toLowerCase(), v);
     else node.setAttribute(k, v === true ? "" : String(v));
   }
@@ -80,6 +91,17 @@ function txt(v) { return v == null || v === "" ? "—" : String(v); }
 function esc(v) {
   return String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
+// Local calendar date as YYYY-MM-DD (toISOString alone is UTC and flips a
+// day early around midnight in Italy).
+function todayIso() {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+}
+function daysUntil(iso) {
+  const days = Math.round((Date.parse(iso) - Date.parse(todayIso())) / 86_400_000);
+  return days === 0 ? "oggi" : days === 1 ? "domani" : days > 1 ? `tra ${days} giorni` : `${-days} giorni fa`;
+}
+
 function tag(text, kind = "muted") {
   return el("span", { class: `tag tag-${kind}` }, text);
 }
@@ -131,6 +153,9 @@ const ERRORS = {
   delphi_unavailable: "Delphi non è raggiungibile al momento.",
   missing_insegnamento: "Inserisci un codice insegnamento.",
   missing_bollettinoId: "Bollettino non valido.",
+  invalid_prenotazione: "Prenotazione non valida.",
+  invalid_piano: "Piano non valido.",
+  invalid_insegnamento: "Insegnamento non valido.",
   invalid_response: "Risposta non valida dal server.",
 };
 function describeError(body) { return ERRORS[body && body.error] || "Errore imprevisto."; }
@@ -318,12 +343,26 @@ const LOADERS = {
     return { data: body, stale };
   },
   piano: async (force) => { const r = await api(refreshed("/piano", force)); if (!r.ok) throw r.body; return { data: r.body, stale: r.stale }; },
-  tasse: async (force) => { const r = await api(refreshed("/tasse", force)); if (!r.ok) throw r.body; return { data: r.body, stale: r.stale }; },
+  // ISEE is best-effort: a failure there must not hide the fees themselves.
+  tasse: async (force) => {
+    const [r, isee] = await Promise.all([api(refreshed("/tasse", force)), api(refreshed("/tasse/isee", force))]);
+    if (!r.ok) throw r.body;
+    return { data: { ...r.body, isee: isee.ok ? isee.body.autorizzazioni : [] }, stale: r.stale || (isee.ok && isee.stale) };
+  },
   servizi: async (force) => { const r = await api(refreshed("/servizi", force)); if (!r.ok) throw r.body; return { data: r.body, stale: r.stale }; },
   certificati: async (force) => { const r = await api(refreshed("/certificati", force)); if (!r.ok) throw r.body; return { data: r.body, stale: r.stale }; },
   anagrafica: async (force) => { const r = await api(refreshed("/anagrafica", force)); if (!r.ok) throw r.body; return { data: r.body, stale: r.stale }; },
   verbali: async (force) => { const r = await api(refreshed("/verbali", force)); if (!r.ok) throw r.body; return { data: r.body, stale: r.stale }; },
   pendenti: async (force) => { const r = await api(refreshed("/esami-pendenti", force)); if (!r.ok) throw r.body; return { data: r.body, stale: r.stale }; },
+  statistiche: async (force) => { const r = await api(refreshed("/carriera/insights", force)); if (!r.ok) throw r.body; return { data: r.body, stale: r.stale }; },
+  sessione: async (force) => {
+    const q = state.sessioneEscludi.size ? `?escludi=${[...state.sessioneEscludi.keys()].join(",")}` : "";
+    const r = await api(refreshed(`/carriera/sessione${q}`, force));
+    if (!r.ok) throw r.body;
+    return { data: r.body, stale: r.stale };
+  },
+  corsi: async (force) => { const r = await api(refreshed("/corsi", force)); if (!r.ok) throw r.body; return { data: r.body, stale: r.stale }; },
+  prenotazioni: async (force) => { const r = await api(refreshed("/prenotazioni", force)); if (!r.ok) throw r.body; return { data: r.body, stale: r.stale }; },
 };
 
 function skeleton(body, rows = 5) {
@@ -411,8 +450,619 @@ function summaryChips(s) {
   ]);
 }
 
+/* ---------------------------- charts ---------------------------- */
+// Small SVG charts for Statistiche, following the dataviz method: one y axis,
+// hairline solid grid, 2px lines, >=8px dots with a 2px surface ring, columns
+// at most 24px wide with a 4px rounded data end, text in ink tokens (never the
+// series color), a hover/focus tooltip on every chart, and a table view.
+// Marks use --chart-mark (validated brand green) and --ink-3 for reference
+// lines; a dashed line always means "projected".
+const SVGNS = "http://www.w3.org/2000/svg";
+const CHART_W = 640;
+function svgEl(tag, attrs = {}, children = []) {
+  const node = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === "style" && typeof v === "object") setStyles(node, v);
+    else node.setAttribute(k, String(v));
+  }
+  for (const c of [].concat(children)) if (c != null) node.append(c.nodeType ? c : document.createTextNode(String(c)));
+  return node;
+}
+const tsOf = (iso) => Date.parse(iso);
+function fmtMonth(t) {
+  return new Date(t).toLocaleDateString("it-IT", { month: "short", year: "numeric" });
+}
+function fmtNum(v, d = 0) {
+  return v == null ? "—" : Number(v).toLocaleString("it-IT", { minimumFractionDigits: d, maximumFractionDigits: d });
+}
+
+// Chart shell: title, legend (only for 2+ series), the plot, and a table view
+// so no value depends on hovering.
+function chartFigure({ title, legend, plot, table }) {
+  return el("figure", { class: "chart" }, [
+    el("figcaption", { class: "chart-title" }, title),
+    legend && legend.length > 1
+      ? el("div", { class: "chart-legend" }, legend.map((l) => el("span", { class: "chart-key" }, [
+          el("span", { class: `chart-swatch ${l.kind}`, style: { "--key": l.color } }),
+          l.name,
+        ])))
+      : null,
+    plot,
+    table ? el("details", { class: "chart-table" }, [
+      el("summary", {}, "Mostra i dati in tabella"),
+      dataTable(table.headers.map((h) => ({ label: h, num: false })), table.rows),
+    ]) : null,
+  ]);
+}
+
+function tooltipNode() {
+  return el("div", { class: "chart-tip", hidden: true, role: "status" });
+}
+function showTip(tip, plot, x, y, header, rows) {
+  tip.replaceChildren(
+    el("div", { class: "chart-tip-head" }, header),
+    ...rows.map((r) => el("div", { class: "chart-tip-row" }, [
+      el("span", { class: `chart-tip-key ${r.kind || "line"}`, style: { "--key": r.color } }),
+      el("strong", {}, r.value),
+      el("span", {}, r.name),
+    ])),
+  );
+  tip.hidden = false;
+  const box = plot.getBoundingClientRect();
+  const left = Math.min(Math.max(x + 12, 0), box.width - tip.offsetWidth - 4);
+  tip.style.left = `${left}px`;
+  tip.style.top = `${Math.max(y - tip.offsetHeight - 10, 0)}px`;
+}
+
+// Time-axis chart. series: { name, color, dash, step, line (default true),
+// dots, points: [{ t, y, label? }], valueLabel(y) }. A crosshair snaps to the
+// nearest data date; the tooltip lists every series at that date.
+function timeChart({ series, yMin, yMax, yTicks, height = 240, yFormat = (v) => fmtNum(v), endLabels = true, ariaLabel }) {
+  const m = { l: 40, r: endLabels ? 96 : 16, t: 14, b: 28 };
+  const all = series.flatMap((s) => s.points);
+  const tMin = Math.min(...all.map((p) => p.t));
+  const tMax = Math.max(...all.map((p) => p.t));
+  const span = Math.max(tMax - tMin, 86_400_000);
+  const X = (t) => m.l + ((t - tMin) / span) * (CHART_W - m.l - m.r);
+  const Y = (v) => m.t + (1 - (v - yMin) / (yMax - yMin)) * (height - m.t - m.b);
+  const svg = svgEl("svg", { viewBox: `0 0 ${CHART_W} ${height}`, class: "chart-svg", role: "img", "aria-label": ariaLabel, tabindex: 0 });
+
+  for (const v of yTicks) {
+    svg.append(svgEl("line", { x1: m.l, x2: CHART_W - m.r, y1: Y(v), y2: Y(v), class: "chart-grid" }));
+    svg.append(svgEl("text", { x: m.l - 6, y: Y(v) + 4, class: "chart-axis", "text-anchor": "end" }, yFormat(v)));
+  }
+  // X ticks: one per year (or per quarter for short spans), labelled compactly.
+  const years = span > 2 * 365 * 86_400_000;
+  const d = new Date(tMin);
+  const cursor = years ? new Date(d.getFullYear() + 1, 0, 1) : new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3 + 3, 1);
+  for (; cursor.getTime() <= tMax; years ? cursor.setFullYear(cursor.getFullYear() + 1) : cursor.setMonth(cursor.getMonth() + 3)) {
+    const x = X(cursor.getTime());
+    svg.append(svgEl("text", { x, y: height - 8, class: "chart-axis", "text-anchor": "middle" },
+      years ? String(cursor.getFullYear()) : cursor.toLocaleDateString("it-IT", { month: "short", year: "2-digit" })));
+  }
+
+  for (const s of series) {
+    const pts = [...s.points].sort((a, b) => a.t - b.t);
+    if (s.line !== false && pts.length > 1) {
+      let dPath = `M${X(pts[0].t)},${Y(pts[0].y)}`;
+      for (let i = 1; i < pts.length; i++) {
+        dPath += s.step ? `H${X(pts[i].t)}V${Y(pts[i].y)}` : `L${X(pts[i].t)},${Y(pts[i].y)}`;
+      }
+      svg.append(svgEl("path", { d: dPath, class: `chart-line${s.dash ? " is-dashed" : ""}`, style: { "--mark": s.color } }));
+    }
+    if (s.dots) for (const p of pts) svg.append(svgEl("circle", { cx: X(p.t), cy: Y(p.y), r: 4.5, class: "chart-dot", style: { "--mark": s.color } }));
+    if (endLabels && s.endLabel && pts.length) {
+      const last = pts[pts.length - 1];
+      svg.append(svgEl("text", { x: X(last.t) + 8, y: Y(last.y) + 4, class: "chart-end" }, s.endLabel));
+    }
+  }
+
+  // Hover layer.
+  const cross = svgEl("line", { y1: m.t, y2: height - m.b, class: "chart-cross", visibility: "hidden" });
+  svg.append(cross);
+  const stops = [...new Set(all.map((p) => p.t))].sort((a, b) => a - b);
+  const valueAt = (s, t) => {
+    const pts = [...s.points].sort((a, b) => a.t - b.t);
+    if (s.line === false) return pts.find((p) => p.t === t) || null;
+    if (t < pts[0].t || t > pts[pts.length - 1].t) return null;
+    if (s.step) return [...pts].reverse().find((p) => p.t <= t) || null;
+    const i = pts.findIndex((p) => p.t >= t);
+    if (pts[i].t === t || i === 0) return pts[i];
+    const a = pts[i - 1], b = pts[i];
+    return { t, y: a.y + ((t - a.t) / (b.t - a.t)) * (b.y - a.y) };
+  };
+  const plot = el("div", { class: "chart-plot" }, [svg]);
+  const tip = tooltipNode();
+  plot.append(tip);
+  let idx = -1;
+  const show = (i) => {
+    idx = Math.max(0, Math.min(stops.length - 1, i));
+    const t = stops[idx];
+    const x = X(t);
+    cross.setAttribute("x1", x); cross.setAttribute("x2", x); cross.setAttribute("visibility", "visible");
+    const rows = series.map((s) => ({ s, p: valueAt(s, t) })).filter((r) => r.p).map(({ s, p }) => ({
+      color: s.color, kind: s.dots && s.line === false ? "dot" : s.dash ? "dash" : "line",
+      value: s.valueLabel ? s.valueLabel(p) : yFormat(p.y), name: p.label ? `${s.name} · ${p.label}` : s.name,
+    }));
+    const scale = svg.getBoundingClientRect().width / CHART_W;
+    showTip(tip, plot, x * scale, 0, fmtDate(new Date(t).toISOString().slice(0, 10)), rows);
+  };
+  const hide = () => { cross.setAttribute("visibility", "hidden"); tip.hidden = true; };
+  svg.addEventListener("pointermove", (e) => {
+    const box = svg.getBoundingClientRect();
+    const t = tMin + (((e.clientX - box.left) / box.width) * CHART_W - m.l) / (CHART_W - m.l - m.r) * span;
+    let best = 0;
+    stops.forEach((s, i) => { if (Math.abs(s - t) < Math.abs(stops[best] - t)) best = i; });
+    show(best);
+  });
+  svg.addEventListener("pointerleave", hide);
+  svg.addEventListener("blur", hide);
+  svg.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowRight") { e.preventDefault(); show(idx + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); show(idx < 0 ? stops.length - 1 : idx - 1); }
+    if (e.key === "Escape") hide();
+  });
+  return plot;
+}
+
+// Column chart for categories. Values sit on the caps of non-empty columns;
+// each column's whole band is its hover/focus target.
+function columnChart({ data, height = 200, ariaLabel, valueLabel = (d) => fmtNum(d.value), tipName }) {
+  const m = { l: 12, r: 12, t: 22, b: 28 };
+  const max = Math.max(1, ...data.map((d) => d.value));
+  const band = (CHART_W - m.l - m.r) / data.length;
+  // 18 viewBox units ≈ 24px at the content width (880px over 640 units).
+  const w = Math.min(18, band * 0.62);
+  const Y = (v) => m.t + (1 - v / max) * (height - m.t - m.b);
+  const base = height - m.b;
+  const svg = svgEl("svg", { viewBox: `0 0 ${CHART_W} ${height}`, class: "chart-svg", role: "img", "aria-label": ariaLabel });
+  svg.append(svgEl("line", { x1: m.l, x2: CHART_W - m.r, y1: base, y2: base, class: "chart-grid" }));
+  const plot = el("div", { class: "chart-plot" }, [svg]);
+  const tip = tooltipNode();
+  plot.append(tip);
+  data.forEach((d, i) => {
+    const cx = m.l + band * i + band / 2;
+    const g = svgEl("g", { class: "chart-col", tabindex: 0, role: "img", "aria-label": `${d.label}: ${valueLabel(d)}` });
+    g.append(svgEl("rect", { x: cx - band / 2, y: m.t, width: band, height: base - m.t, class: "chart-hit" }));
+    if (d.value > 0) {
+      const top = Y(d.value);
+      const r = Math.min(4, (base - top) / 2, w / 2);
+      g.append(svgEl("path", {
+        class: "chart-bar", style: { "--mark": "var(--chart-mark)" },
+        d: `M${cx - w / 2},${base}V${top + r}Q${cx - w / 2},${top} ${cx - w / 2 + r},${top}H${cx + w / 2 - r}Q${cx + w / 2},${top} ${cx + w / 2},${top + r}V${base}Z`,
+      }));
+      g.append(svgEl("text", { x: cx, y: top - 6, class: "chart-cap", "text-anchor": "middle" }, valueLabel(d)));
+    }
+    g.append(svgEl("text", { x: cx, y: height - 8, class: "chart-axis", "text-anchor": "middle" }, d.label));
+    const show = () => {
+      const scale = svg.getBoundingClientRect().width / CHART_W;
+      showTip(tip, plot, cx * scale, Y(Math.max(d.value, 0)) * scale, d.label, [{ color: "var(--chart-mark)", kind: "bar", value: valueLabel(d), name: tipName }]);
+    };
+    g.addEventListener("pointerenter", show);
+    g.addEventListener("focus", show);
+    g.addEventListener("pointerleave", () => { tip.hidden = true; });
+    g.addEventListener("blur", () => { tip.hidden = true; });
+    svg.append(g);
+  });
+  return plot;
+}
+
+/* ---------------------------- statistiche ---------------------------- */
+const ESITO = {
+  superato: { text: "superato", kind: "ok" },
+  non_superato: { text: "non superato", kind: "bad" },
+  senza_esito: { text: "nessun esito", kind: "warn" },
+  in_programma: { text: "in programma", kind: "info" },
+};
+const CHECK = {
+  ok: { text: "Fatto", kind: "ok" },
+  da_fare: { text: "Da fare", kind: "muted" },
+  attenzione: { text: "Attenzione", kind: "warn" },
+  info: { text: "Info", kind: "info" },
+};
+const sectionLabel = (text, meta) => el("div", { class: "section-label" }, [
+  el("span", { class: "label-text" }, text),
+  meta ? el("span", { class: "label-meta muted" }, meta) : null,
+]);
+const statTile = (label, value, sub) => el("div", { class: "stat" }, [
+  el("div", { class: "stat-label" }, label),
+  el("div", {}, [el("span", { class: "stat-value" }, value), sub ? el("span", { class: "stat-sub" }, sub) : null]),
+]);
+
+function statsForecast(ins) {
+  const p = ins.previsione;
+  const g = ins.progresso;
+  const today = tsOf(ins.oggi);
+  const start = p.aaImmatricolazione ? tsOf(`${p.aaImmatricolazione.slice(0, 4)}-10-01`) : (p.cfuCumulati[0] ? tsOf(p.cfuCumulati[0].data) : today);
+  const actual = [{ t: start, y: 0 }, ...p.cfuCumulati.map((c) => ({ t: tsOf(c.data), y: c.cfu })), { t: today, y: g.cfuAcquisiti }];
+  // The actual line is labelled only when no projection starts at its end.
+  const series = [{ name: "Crediti acquisiti", color: "var(--chart-mark)", step: true, points: actual, endLabel: g.cfuMancanti > 0 && p.dataStimata ? null : `${g.cfuAcquisiti} CFU` }];
+  // A projection further than eight years out is cut at the edge with the
+  // value it reaches there; the text above carries the full date.
+  const cap = today + 8 * 365.25 * 86_400_000;
+  if (p.dataStimata && g.cfuMancanti > 0) {
+    const end = Math.min(tsOf(p.dataStimata), cap);
+    const y = g.cfuAcquisiti + (g.cfuMancanti * (end - today)) / (tsOf(p.dataStimata) - today);
+    series.push({ name: "Proiezione al tuo ritmo", color: "var(--chart-mark)", dash: true, points: [{ t: today, y: g.cfuAcquisiti }, { t: end, y }], endLabel: `laurea ${fmtMonth(tsOf(p.dataStimata))}` });
+  }
+  if (p.scadenzaInCorso && tsOf(p.scadenzaInCorso) > today && g.cfuMancanti > 0) {
+    series.push({ name: "Per laurearti in corso", color: "var(--ink-3)", dash: true, points: [{ t: today, y: g.cfuAcquisiti }, { t: tsOf(p.scadenzaInCorso), y: g.cfuTotali }], endLabel: "in corso" });
+  }
+  const step = g.cfuTotali > 120 ? 60 : 30;
+  const ticks = Array.from({ length: Math.floor(g.cfuTotali / step) + 1 }, (_, i) => i * step);
+  if (ticks[ticks.length - 1] !== g.cfuTotali) ticks.push(g.cfuTotali);
+
+  const summary = [];
+  if (g.cfuMancanti === 0) summary.push("Hai tutti i crediti del piano.");
+  else if (p.dataStimata) {
+    summary.push(`Al ritmo ${p.ritmoRecente > 0 ? "degli ultimi 12 mesi" : "medio"} (${fmtNum(p.ritmoUsato, 0)} CFU l'anno) ti mancano circa ${fmtNum(g.cfuMancanti / p.ritmoUsato, 1)} anni: laurea intorno a ${fmtMonth(tsOf(p.dataStimata))} (AA ${p.aaStimato}).`);
+  } else summary.push("Non ci sono ancora abbastanza esami per stimare il tuo ritmo.");
+  if (p.scadenzaInCorso && p.scadenzaInCorso < ins.oggi && g.cfuMancanti > 0) {
+    summary.push(`La durata normale del corso è già trascorsa (ultimo anno in corso: ${p.ultimoAaInCorso}).`);
+  } else if (p.cfuAnnoNecessari != null && g.cfuMancanti > 0) {
+    summary.push(`Per laurearti in corso (ultimo anno ${p.ultimoAaInCorso}, sessioni fino a circa ${fmtMonth(tsOf(p.scadenzaInCorso))}) servono ${fmtNum(p.cfuAnnoNecessari, 0)} CFU l'anno.`);
+  }
+  const status = p.inCorso == null ? null : p.inCorso ? tag("In linea per laurearti in corso", "ok") : tag("Al ritmo attuale andresti fuori corso", "warn");
+
+  return el("div", { class: "section" }, [
+    sectionLabel("Previsione di laurea", g.totaliDaPiano ? "dal tuo piano di studi" : `${g.cfuTotali} CFU stimati, piano non disponibile`),
+    el("div", { class: "flex-row mb-3" }, [status]),
+    ...summary.map((s) => el("p", { class: "stats-text" }, s)),
+    chartFigure({
+      title: "Crediti nel tempo",
+      legend: series.map((s) => ({ name: s.name, color: s.color, kind: s.dash ? "dash" : "line" })),
+      plot: timeChart({ series, yMin: 0, yMax: g.cfuTotali, yTicks: ticks, ariaLabel: "Crediti acquisiti nel tempo con proiezione", yFormat: (v) => fmtNum(v), }),
+      table: { headers: ["Data", "CFU totali"], rows: p.cfuCumulati.map((c) => [fmtDate(c.data), String(c.cfu)]) },
+    }),
+  ]);
+}
+
+function statsGrades(ins) {
+  const md = ins.media;
+  const out = [];
+  if (md.andamento.length) {
+    const pts = md.andamento.map((a) => ({ t: tsOf(a.data), y: a.voto, label: a.nome, lode: a.lode }));
+    out.push(chartFigure({
+      title: "Voti e media nel tempo",
+      legend: [{ name: "Voto", color: "var(--chart-mark)", kind: "dot" }, { name: "Media ponderata", color: "var(--ink-3)", kind: "line" }],
+      plot: timeChart({
+        ariaLabel: "Voto di ogni esame e media ponderata nel tempo",
+        yMin: 18, yMax: 30, yTicks: [18, 21, 24, 27, 30], endLabels: true,
+        series: [
+          { name: "Voto", color: "var(--chart-mark)", line: false, dots: true, points: pts, valueLabel: (p) => (p.lode ? "30 e lode" : String(p.y)) },
+          { name: "Media ponderata", color: "var(--ink-3)", step: true, points: md.andamento.map((a) => ({ t: tsOf(a.data), y: a.mediaCumulata })), endLabel: `media ${fmtNum(md.ponderata, 2)}`, valueLabel: (p) => fmtNum(p.y, 2) },
+        ],
+      }),
+      table: { headers: ["Data", "Esame", "Voto", "CFU", "Media dopo l'esame"], rows: md.andamento.map((a) => [fmtDate(a.data), a.nome, a.lode ? "30 e lode" : String(a.voto), String(a.cfu), fmtNum(a.mediaCumulata, 2)]) },
+    }));
+    out.push(chartFigure({
+      title: "Distribuzione dei voti",
+      plot: columnChart({ ariaLabel: "Numero di esami per voto", tipName: "esami", data: md.distribuzione.map((d) => ({ label: d.voto === "30L" ? "30L" : d.voto, value: d.esami })) }),
+      table: { headers: ["Voto", "Esami"], rows: md.distribuzione.filter((d) => d.esami).map((d) => [d.voto === "30L" ? "30 e lode" : d.voto, String(d.esami)]) },
+    }));
+  }
+  if (ins.perAnno.length) {
+    out.push(chartFigure({
+      title: "Crediti per anno accademico",
+      plot: columnChart({ ariaLabel: "Crediti acquisiti per anno accademico", tipName: "CFU", data: ins.perAnno.map((a) => ({ label: a.aa, value: a.cfu })) }),
+      table: { headers: ["Anno", "CFU", "Esami"], rows: ins.perAnno.map((a) => [a.aa, String(a.cfu), String(a.esami)]) },
+    }));
+  }
+  if (!out.length) return null;
+  return el("div", { class: "section" }, [sectionLabel("Voti e crediti", "30 e lode vale 30, come su Delphi"), el("div", { class: "chart-grid-2" }, out)]);
+}
+
+// Target solver: which average the remaining graded CFU need for a target
+// degree base. Recomputed in the browser as the target changes.
+function statsTarget(ins) {
+  const o = ins.obiettivo;
+  const md = ins.media;
+  if (!o.cfuDaValutare) return null;
+  const totale = md.cfuConVoto + o.cfuDaValutare;
+  const result = el("div", { class: "stats-target-result" });
+  const input = el("input", { class: "input mono", type: "number", min: "66", max: "110", step: "1", value: "105", "aria-label": "Base di laurea obiettivo" });
+  const update = () => {
+    const target = Math.min(110, Math.max(66, Number(input.value) || 105));
+    const media = (target * 30) / 110;
+    const needed = (media * totale - md.sommaVotiCfu) / o.cfuDaValutare;
+    result.replaceChildren(
+      needed > 30
+        ? el("p", {}, [el("strong", {}, "Non raggiungibile: "), `anche con 30 in tutti i ${o.cfuDaValutare} CFU restanti arriveresti a ${fmtNum(((md.sommaVotiCfu + 30 * o.cfuDaValutare) / totale) * 110 / 30, 1)}.`])
+        : needed < 18
+          ? el("p", {}, [el("strong", {}, "Già garantito: "), "anche con 18 in tutti gli esami restanti resteresti sopra l'obiettivo."])
+          : el("p", {}, ["Ti serve una media di ", el("strong", { class: "stats-big" }, fmtNum(needed, 2)), ` sui ${o.cfuDaValutare} CFU che restano da valutare.`]),
+    );
+  };
+  input.addEventListener("input", update);
+  update();
+  return el("div", { class: "section" }, [
+    sectionLabel("Obiettivo di laurea", "su 110, prova finale esclusa"),
+    el("div", { class: "card sim-card" }, [
+      el("label", { class: "flex-row gap-2 mb-3" }, [el("span", {}, "Base di laurea che vuoi raggiungere"), input]),
+      result,
+      dataTable(
+        [{ label: "Esame da sostenere" }, { label: "CFU", num: true }, { label: "Effetto di un punto in più", num: true }],
+        o.esami.map((e) => [
+          { node: el("div", { class: "row-cell-name" }, [el("strong", {}, txt(e.nome)), e.codice ? el("span", { class: "row-cell-sub" }, e.codice) : null]) },
+          { num: true, node: String(e.cfu) },
+          { num: true, node: `+${fmtNum((e.cfu / totale) * 110 / 30, 2)} sulla base` },
+        ]),
+      ),
+      el("p", { class: "list-note" }, "Gli esami con più crediti pesano di più: un punto in un esame da 12 CFU vale il doppio che in uno da 6. Tirocinio, idoneità e prova finale non hanno voto e non contano."),
+    ]),
+  ]);
+}
+
+function statsAttempts(ins) {
+  const list = ins.tentativi;
+  if (!list.length) return null;
+  return el("div", { class: "section" }, [
+    sectionLabel("Tentativi per esame", "dalle prenotazioni e dal libretto"),
+    dataTable(
+      [{ label: "Esame" }, { label: "Tentativi", num: true }, { label: "Superato al" }, { label: "Storia" }],
+      list.map((s) => [
+        { node: el("strong", {}, txt(s.nome)) },
+        { num: true, node: String(s.tentativi.filter((t) => t.esito !== "in_programma").length) },
+        s.superatoAl ? `${s.superatoAl}° tentativo` : "—",
+        { node: el("div", { class: "flex-row gap-2", style: { flexWrap: "wrap" } }, s.tentativi.map((t) =>
+          el("span", { class: `tag tag-${ESITO[t.esito].kind}`, title: t.voto ? `Voto ${t.voto}` : "" }, `${t.data ? fmtDate(t.data) : "—"} · ${ESITO[t.esito].text}`))) },
+      ]),
+    ),
+    el("p", { class: "list-note" }, "«Nessun esito» è una prenotazione passata senza voto né bocciatura registrati: ritiro o assenza. Delphi non distingue i due casi."),
+  ]);
+}
+
+function statsChecklist(ins) {
+  return el("div", { class: "section" }, [
+    sectionLabel("Verso la laurea"),
+    el("div", { class: "list-rows" }, ins.checklist.map((c) => el("div", { class: "list-row" }, [
+      el("div", { class: "list-body" }, [
+        el("div", { class: "list-title" }, c.voce),
+        el("div", { class: "list-sub" }, c.dettaglio),
+      ]),
+      el("span", { class: `tag tag-${CHECK[c.stato].kind}` }, CHECK[c.stato].text),
+    ]))),
+  ]);
+}
+
+function statsElectives(ins) {
+  if (!ins.gruppiScelta.length) return null;
+  return el("div", { class: "section" }, [
+    sectionLabel("Esami a scelta", "dal tuo piano"),
+    el("div", { class: "list-rows" }, ins.gruppiScelta.map((g) => el("div", { class: "list-row" }, [
+      el("div", { class: "list-body" }, [
+        el("div", { class: "list-sub" }, `${g.anno ? `${g.anno}° anno · ` : ""}${g.gruppo}`),
+        ...g.esami.map((e) => el("div", { class: "list-title" }, [
+          `${txt(e.nome)} · ${e.cfu ?? "—"} CFU `,
+          e.stato === "superato" ? tag("superato", "ok") : e.stato === "in_corso" ? tag("in corso", "info") : tag("da sostenere", "muted"),
+        ])),
+      ]),
+    ]))),
+    el("p", { class: "list-note" }, "Il PDF del piano riporta solo l'esame scelto in ogni gruppo. Le alternative compaiono solo nel compositore GOMP."),
+  ]);
+}
+
+const EVENTO = { immatricolazione: "Immatricolazione", esame: "Esame", fallito: "Non superato", assenza: "Nessun esito", tassa: "Tassa", piano: "Piano" };
+function statsTimeline(ins) {
+  if (!ins.timeline.length) return null;
+  const byAa = new Map();
+  for (const e of ins.timeline) {
+    const k = e.aa || "—";
+    if (!byAa.has(k)) byAa.set(k, []);
+    byAa.get(k).push(e);
+  }
+  return el("div", { class: "section" }, [
+    sectionLabel("La tua carriera", `${ins.timeline.length} eventi`),
+    ...[...byAa.entries()].reverse().map(([aa, events]) => el("div", { class: "timeline-year" }, [
+      el("div", { class: "timeline-aa" }, `Anno accademico ${aa}`),
+      el("ol", { class: "timeline" }, [...events].reverse().map((e) => el("li", { class: `timeline-item is-${e.tipo}` }, [
+        el("span", { class: "timeline-date mono" }, e.data ? fmtDate(e.data) : ""),
+        el("span", { class: "timeline-type" }, EVENTO[e.tipo]),
+        el("span", { class: "timeline-title" }, [el("strong", {}, e.titolo), e.dettaglio ? el("span", { class: "muted" }, ` · ${e.dettaglio}`) : null]),
+      ]))),
+    ])),
+  ]);
+}
+
+function renderStatistiche(body, ins) {
+  setPageHead("statistiche", { title: "Statistiche", subtitle: "Andamento, previsioni e cosa manca alla laurea." });
+  const g = ins.progresso;
+  const pct = g.cfuTotali ? Math.min(100, Math.round((g.cfuAcquisiti / g.cfuTotali) * 100)) : 0;
+  const hero = el("div", { class: "card card--hero hero-lozenge" }, [
+    el("div", { class: "stat-row" }, [
+      statTile("Crediti", String(g.cfuAcquisiti), `/ ${g.cfuTotali}`),
+      statTile("Media ponderata", ins.media.ponderata != null ? fmtNum(ins.media.ponderata, 2) : "—", "su 30"),
+      statTile("Base di laurea", ins.media.baseLaurea != null ? fmtNum(ins.media.baseLaurea, 2) : "—", "su 110"),
+      statTile("Esami mancanti", g.totaliDaPiano ? String(g.esamiMancanti.length) : "—", g.totaliDaPiano ? `${g.cfuMancanti} CFU` : "piano non disponibile"),
+    ]),
+    el("div", { class: "meter mt-4", role: "meter", "aria-valuemin": "0", "aria-valuemax": String(g.cfuTotali), "aria-valuenow": String(g.cfuAcquisiti), "aria-label": "Crediti acquisiti" }, [
+      el("div", { class: "meter-fill", style: { width: `${pct}%` } }),
+    ]),
+    el("div", { class: "stat-sub mt-3" }, `${pct}% del percorso`),
+  ]);
+  body.replaceChildren(...[hero, statsForecast(ins), statsGrades(ins), statsTarget(ins), statsAttempts(ins), statsElectives(ins), statsChecklist(ins), statsTimeline(ins)].filter(Boolean));
+}
+
+/* ---------------------------- sessione ---------------------------- */
+const FINESTRA = {
+  aperta: { text: "prenotazioni aperte", kind: "ok" },
+  da_aprire: { text: "prenotazioni non ancora aperte", kind: "info" },
+  chiusa: { text: "prenotazioni chiuse", kind: "muted" },
+  sconosciuta: { text: "finestra non indicata", kind: "muted" },
+};
+function renderSessione(body, data) {
+  setPageHead("sessione", { title: "Sessione", subtitle: "Un calendario d'esami proposto per i prossimi mesi, dagli appelli pubblicati." });
+  // Excluded exams: code → name, kept for the session of the page.
+  const escludi = state.sessioneEscludi;
+  const qs = escludi.size ? `?escludi=${[...escludi.keys()].join(",")}` : "";
+  const toggle = (codice, nome, on) => {
+    if (on) escludi.delete(codice); else escludi.set(codice, nome);
+    loadView("sessione", false);
+  };
+  const intro = el("p", { class: "stats-text" }, `Periodo: ${fmtDate(data.da)} – ${fmtDate(data.a)}. Gli esami pesanti sono distanziati di più giorni; quelli che hai già prenotato restano fissi.`);
+  if (!data.pianificati.length) {
+    body.replaceChildren(intro, emptyState("Nessun appello pubblicato", "Il calendario dei prossimi mesi non ha ancora appelli per gli esami che ti mancano. Riprova quando Delphi pubblica la sessione.", "calendar"),
+      ...(escludi.size ? [el("button", { class: "btn btn-ghost btn-sm mt-3", type: "button", onClick: () => { escludi.clear(); loadView("sessione", false); } }, "Includi di nuovo tutti gli esami")] : []));
+    return;
+  }
+  const rows = data.pianificati.map((p) => {
+    const f = FINESTRA[p.prenotazione];
+    const a = p.appello;
+    return el("div", { class: "list-row" }, [
+      el("div", { class: "list-icon" }, [icoNode("calendar", 18)]),
+      el("div", { class: "list-body" }, [
+        el("div", { class: "list-title" }, `${fmtDate(a.dataEsame)}${a.ora ? ` · ${a.ora}` : ""} · ${txt(p.nome)}`),
+        el("div", { class: "list-sub" }, `${p.cfu ?? "—"} CFU · appello ${txt(a.appello)} · ${txt(a.aula)} · ${txt(a.docente)}`),
+        el("div", { class: "flex-row gap-2 mt-3", style: { flexWrap: "wrap" } }, [
+          p.prenotato ? tag("già prenotato", "ok") : tag(f.text, f.kind),
+          !p.prenotato && a.inizioPrenotazione ? tag(`dal ${fmtDate(a.inizioPrenotazione)} al ${fmtDate(a.finePrenotazione)}`, "muted") : null,
+          p.ravvicinato ? tag("vicino a un altro esame", "warn") : null,
+        ]),
+        p.alternative.length ? el("div", { class: "list-sub mt-3" }, `Altre date: ${p.alternative.map((x) => fmtDate(x.dataEsame)).join(", ")}`) : null,
+      ]),
+      p.prenotato ? null : el("button", { class: "btn btn-ghost btn-sm list-action", type: "button", onClick: () => toggle(p.codice, p.nome, false) }, "Escludi"),
+    ]);
+  });
+  const excluded = [...escludi.entries()];
+  body.replaceChildren(...[
+    intro,
+    el("a", { class: "btn btn-secondary btn-sm mb-4", href: `/carriera/sessione.ics${qs}`, download: "sessione-pianificata.ics" }, [icoNode("calendar", 14), el("span", {}, "Aggiungi al calendario")]),
+    el("div", { class: "list-rows" }, rows),
+    data.senzaAppello.length ? el("div", { class: "section mt-6" }, [
+      sectionLabel("Senza appelli nel periodo", `${data.senzaAppello.length} esami`),
+      el("p", { class: "muted" }, data.senzaAppello.map((s) => s.nome).join(" · ")),
+    ]) : null,
+    excluded.length ? el("div", { class: "section mt-6" }, [
+      sectionLabel("Esclusi da questa sessione"),
+      el("div", { class: "flex-row gap-2", style: { flexWrap: "wrap" } }, excluded.map(([codice, nome]) =>
+        el("button", { class: "btn btn-ghost btn-sm", type: "button", onClick: () => toggle(codice, nome, true) }, `Includi ${nome}`))),
+    ]) : null,
+  ].filter(Boolean));
+}
+
+/* ---------------------------- home extras ---------------------------- */
+
+// "In arrivo" on Home: upcoming booked exams, unpaid fees, open records. Each
+// source is best-effort; a failing one just contributes no items. These calls
+// also warm the other views' caches.
+async function loadUpcoming(section) {
+  const get = (path) => api(path).then((r) => (r.ok ? r.body : null), () => null);
+  const [pren, tasse, verbali, pendenti] = await Promise.all(["/prenotazioni", "/tasse", "/verbali", "/esami-pendenti"].map(get));
+  if (!section.isConnected) return;
+  const today = todayIso();
+  const items = [];
+  for (const p of ((pren && pren.prenotazioni) || []).filter((p) => p.dataEsame && p.dataEsame >= today).sort((a, b) => a.dataEsame.localeCompare(b.dataEsame))) {
+    items.push({ icon: "calendar", view: "prenotazioni", title: txt(p.insegnamento),
+      sub: `Esame ${daysUntil(p.dataEsame)} · ${fmtDate(p.dataEsame)} · appello ${txt(p.appello)}` });
+  }
+  for (const anno of (tasse && tasse.anni) || []) {
+    for (const r of (anno.rate || []).filter((r) => !r.saldato && r.importo > 0)) {
+      const late = r.scadenza && r.scadenza < today;
+      items.push({ icon: "wallet", view: "tasse", title: `Rata ${txt(r.numero)} da pagare · ${fmtEuro(r.importo)}`,
+        sub: r.scadenza ? `${late ? "Scaduta" : "Scade"} il ${fmtDate(r.scadenza)} · ${anno.anno}` : anno.anno, warn: late });
+    }
+  }
+  const nVerbali = ((verbali && verbali.verbali) || []).length;
+  if (nVerbali) items.push({ icon: "inbox", view: "verbali", title: nVerbali === 1 ? "1 verbale aperto" : `${nVerbali} verbali aperti`, sub: "Da consultare" });
+  const nPendenti = ((pendenti && pendenti.esami) || []).length;
+  if (nPendenti) items.push({ icon: "inbox", view: "pendenti", title: nPendenti === 1 ? "1 esame in verbalizzazione" : `${nPendenti} esami in verbalizzazione`, sub: "In attesa del docente" });
+
+  const label = section.firstChild;
+  if (!items.length) {
+    section.replaceChildren(label, el("p", { class: "muted" }, "Niente in scadenza: nessun esame prenotato, rata da pagare o verbale aperto."));
+    return;
+  }
+  section.replaceChildren(label, el("div", { class: "list-rows" }, items.map((it) =>
+    el("a", { class: "list-row upcoming-row", href: "#", onClick: (e) => { e.preventDefault(); activateView(it.view); } }, [
+      el("div", { class: "list-icon" }, [icoNode(it.icon, 18)]),
+      el("div", { class: "list-body" }, [
+        el("div", { class: "list-title" }, it.title),
+        el("div", { class: "list-sub" }, it.warn ? el("span", { class: "tag tag-warn" }, it.sub) : it.sub),
+      ]),
+    ]))));
+}
+
+// Weighted average the way Delphi computes it (checked against both test
+// accounts): passed exams graded in thirtieths, partial results excluded,
+// "30 e lode" counted as 30, weighted by CFU.
+function mediaPonderata(rows) {
+  const valid = rows.filter((r) => r.cfu > 0 && r.voto >= 18 && r.voto <= 30);
+  const cfu = valid.reduce((s, r) => s + r.cfu, 0);
+  return cfu ? valid.reduce((s, r) => s + r.voto * r.cfu, 0) / cfu : null;
+}
+
+// What-if calculator on Home. Starts from the exams still without a grade
+// (stato in_corso) and lets the student add more; nothing leaves the browser.
+function gradeSimulator(esami) {
+  const passed = esami
+    .filter((e) => e.stato === "superato" && e.voto && e.voto.tipo === "trentesimi" && !e.isPartial)
+    .map((e) => ({ cfu: e.cfu || 0, voto: e.voto.valore }));
+  if (!state.sim) {
+    state.sim = esami.filter((e) => e.stato === "in_corso").map((e) => ({ nome: e.nome, cfu: e.cfu || 6, voto: null }));
+    if (!state.sim.length) state.sim.push({ nome: "", cfu: 6, voto: null });
+  }
+  const current = mediaPonderata(passed);
+  const fmt = (v) => (v == null ? "—" : v.toFixed(2));
+  const result = el("div", { class: "stat-row sim-result" });
+  const rowsBox = el("div", { class: "sim-rows" });
+
+  function update() {
+    const projected = mediaPonderata([...passed, ...state.sim]);
+    const stat = (label, now, next, sub) => el("div", { class: "stat" }, [
+      el("div", { class: "stat-label" }, label),
+      el("div", {}, [
+        el("span", { class: "stat-value" }, fmt(next)),
+        el("span", { class: "stat-sub" }, next != null && now != null && next.toFixed(2) !== now.toFixed(2) ? `ora ${fmt(now)}` : sub),
+      ]),
+    ]);
+    result.replaceChildren(
+      stat("Media ponderata", current, projected, "su 30"),
+      stat("Base di laurea", current && current * 110 / 30, projected && projected * 110 / 30, "su 110"),
+    );
+  }
+
+  function renderRows() {
+    rowsBox.replaceChildren(...state.sim.map((r, i) => el("div", { class: "sim-row" }, [
+      el("input", { class: "input", type: "text", placeholder: "Esame", value: r.nome, "aria-label": "Esame",
+        onInput: (e) => { r.nome = e.target.value; } }),
+      el("input", { class: "input mono", type: "number", min: "1", max: "30", value: String(r.cfu), "aria-label": "CFU",
+        onInput: (e) => { r.cfu = Number(e.target.value) || 0; update(); } }),
+      (() => {
+        const sel = el("select", { class: "select", "aria-label": "Voto",
+          onChange: (e) => { r.voto = e.target.value ? Number(e.target.value) : null; update(); } }, [
+          el("option", { value: "" }, "Voto"),
+          ...Array.from({ length: 13 }, (_, k) => 18 + k).map((v) => el("option", { value: String(v) }, String(v))),
+        ]);
+        sel.value = r.voto == null ? "" : String(r.voto);
+        return sel;
+      })(),
+      el("button", { class: "btn btn-ghost btn-sm", type: "button", "aria-label": "Rimuovi",
+        onClick: () => { state.sim.splice(i, 1); renderRows(); update(); } }, "Rimuovi"),
+    ])));
+  }
+
+  renderRows();
+  update();
+  return el("div", { class: "section mt-6" }, [
+    el("div", { class: "section-label" }, [
+      el("span", { class: "label-text" }, "Simula la media"),
+      el("span", { class: "label-meta muted" }, "30 e lode vale 30"),
+    ]),
+    el("div", { class: "card sim-card" }, [
+      result,
+      rowsBox,
+      el("button", { class: "btn btn-secondary btn-sm mt-3", type: "button",
+        onClick: () => { state.sim.push({ nome: "", cfu: 6, voto: null }); renderRows(); update(); } }, "Aggiungi esame"),
+      el("p", { class: "list-note" }, "La base di laurea è la media ponderata in centodecimi. Il voto finale dipende anche dalla prova finale e dal regolamento del tuo corso."),
+    ]),
+  ]);
+}
+
 /* ---------------------------- renderers ---------------------------- */
 const RENDERERS = {
+  statistiche: renderStatistiche,
+  sessione: renderSessione,
   riepilogo(body, data) {
     const h = data.header || {};
     const r = data.rendimento || {};
@@ -482,7 +1132,12 @@ const RENDERERS = {
           ])))
       : emptyState("Nessun esame", "Quando registrerai un esame, lo vedrai qui.");
 
-    body.replaceChildren(heroLozenge, subLabel, recentList);
+    const upcoming = el("div", { class: "section" }, [
+      el("div", { class: "section-label" }, el("span", { class: "label-text" }, "In arrivo")),
+      el("div", { class: "skeleton" }, [el("div", { class: "skel-row" }), el("div", { class: "skel-row" })]),
+    ]);
+    body.replaceChildren(heroLozenge, upcoming, subLabel, recentList, gradeSimulator(esami));
+    loadUpcoming(upcoming);
 
     // Populate the session block (sidebar + drawer) — the riepilogo is the
     // canonical place where the student's name + matricola are known.
@@ -531,10 +1186,15 @@ const RENDERERS = {
   appelli(body, data) {
     setPageHead("appelli", { title: "Appelli", subtitle: "Calendario delle prove d'esame: date, aule e finestre di prenotazione." });
     if (!data || !data.length) { body.replaceChildren(emptyState("Nessun appello", "Nessuna prova trovata. All'inizio dell'anno accademico prova anche l'anno precedente.", "calendar")); return; }
+    // One "Info" button per course, on its first exam-session row.
+    const seen = new Set();
     body.replaceChildren(dataTable(
       [{ label: "Insegnamento" }, { label: "CFU", num: true }, { label: "Sessione" }, { label: "Appello" }, { label: "Data esame" }, { label: "Ora" }, { label: "Aula" }, { label: "Prenotazioni" }, { label: "Stato" }],
       data.map((a) => [
-        { node: el("strong", {}, txt(a.insegnamento)) },
+        { node: el("div", {}, [
+          el("strong", {}, txt(a.insegnamento)),
+          a.idCorIns && !seen.has(a.idCorIns) && seen.add(a.idCorIns) ? infoInsegnamentoButton(a.idCorIns) : null,
+        ]) },
         { num: true, node: String(txt(a.cfu)) },
         txt(a.sessione),
         txt(a.appello),
@@ -553,24 +1213,30 @@ const RENDERERS = {
 
   piano(body, data) {
     setPageHead("piano", { title: "Piano", subtitle: "I tuoi piani di studio compilati su GOMP." });
-    const portal = data.composerUrl
-      ? el("a", { class: "btn btn-ghost btn-sm", href: data.composerUrl, target: "_blank", rel: "noopener" }, [icoNode("external", 14), el("span", {}, "Apri nel portale")])
-      : null;
+    // GOMP runs inside Delphee through the mirror routes, with the GOMP
+    // session held server-side. The composer itself is GOMP's own page.
+    const portal = el("div", {}, [
+      el("a", { class: "btn btn-ghost btn-sm", href: "/WorkFlow2011/Studenti/Composer/ElencoPiani.aspx", target: "_blank", rel: "noopener" }, [icoNode("external", 14), el("span", {}, "Apri GOMP")]),
+      el("p", { class: "list-note" }, "Il compositore del piano è la pagina originale di GOMP, aperta tramite Delphee. Delphee non lo integra ancora: per farlo serve un account con la compilazione aperta e nessun piano già inviato per l'anno, su cui provare senza conseguenze. Se puoi offrirlo e sai programmare, puoi contribuire su GitHub."),
+    ]);
     if (!data.piani || !data.piani.length) {
-      body.replaceChildren(emptyState("Nessun piano", "Nessun piano di studi compilato. Dal portale puoi compilarne uno nuovo.", "list"), portal ?? "");
+      body.replaceChildren(emptyState("Nessun piano", "Nessun piano di studi compilato. Da GOMP puoi compilarne uno nuovo.", "list"), portal);
       return;
     }
     body.replaceChildren(
       dataTable(
-        [{ label: "A/A" }, { label: "Denominazione" }, { label: "Ultima modifica" }, { label: "Status" }],
+        [{ label: "A/A" }, { label: "Denominazione" }, { label: "Ultima modifica" }, { label: "Status" }, { label: "Piano" }],
         data.piani.map((p) => [
           { mono: true, node: el("span", { class: "mono" }, txt(p.aa)) },
           { node: el("strong", {}, txt(p.denominazione)) },
           { mono: true, node: el("span", { class: "mono" }, txt(p.ultimaModifica)) },
           { node: el("span", { class: p.status === "Approvato" ? "tag tag-ok" : "tag tag-muted" }, txt(p.status)) },
+          { node: p.ps
+            ? el("a", { class: "btn btn-ghost btn-sm", href: `/piano/pdf?ps=${encodeURIComponent(p.ps)}`, target: "_blank", rel: "noopener" }, [icoNode("download", 14), el("span", {}, "PDF")])
+            : el("span", { class: "muted" }, "—") },
         ]),
       ),
-      portal ?? "",
+      portal,
     );
   },
 
@@ -661,6 +1327,25 @@ const RENDERERS = {
       ]));
     }
 
+    const isee = data.isee || [];
+    if (isee.length) {
+      frag.append(el("div", { class: "section" }, [
+        el("div", { class: "section-label" }, [
+          el("span", { class: "label-text" }, "Autorizzazione ISEE-U"),
+        ]),
+        dataTable(
+          [{ label: "Anno" }, { label: "Autorizzazione" }, { label: "Stato" }, { label: "Protocollo" }, { label: "Elaborata il" }],
+          isee.map((a) => [
+            { mono: true, node: el("span", { class: "mono" }, txt(a.annoAccademico)) },
+            txt(a.autorizzazione),
+            { node: el("div", {}, [txt(a.stato), a.erroreInps ? el("div", { class: "row-cell-sub" }, `Errore INPS: ${a.erroreInps}`) : null]) },
+            { mono: true, node: el("span", { class: "mono" }, txt(a.protocollo)) },
+            { mono: true, node: el("span", { class: "mono" }, txt(a.dataElaborazione)) },
+          ]),
+        ),
+      ]));
+    }
+
     if (!frag.childNodes.length) frag.append(emptyState("Nessun dato tasse", "Non risultano pagamenti registrati.", "wallet"));
     body.replaceChildren(frag);
   },
@@ -719,6 +1404,18 @@ const RENDERERS = {
         ]),
       ]));
     }
+    // Not a certificate, but the same kind of printable document.
+    frag.append(el("div", { class: "list-row" }, [
+      el("div", { class: "list-icon" }, [icoNode("award", 18)]),
+      el("div", { class: "list-body" }, [
+        el("div", { class: "list-title" }, "Domanda di iscrizione"),
+        el("div", { class: "list-sub" }, "Ristampa dell'ultima domanda di iscrizione o immatricolazione."),
+      ]),
+      el("a", { class: "btn btn-secondary btn-sm list-action", href: "/iscrizione/domanda", target: "_blank", rel: "noopener" }, [
+        icoNode("download", 14),
+        el("span", {}, "Stampa"),
+      ]),
+    ]));
     const list = el("div", { class: "list-rows" }, [...frag.childNodes]);
     body.replaceChildren(
       ...(data.limiteNote ? [el("p", { class: "list-note" }, data.limiteNote)] : []),
@@ -759,6 +1456,63 @@ const RENDERERS = {
         { mono: true, node: el("span", { class: "mono" }, txt(e.verbale)) },
       ]),
     ));
+  },
+
+  // Read-only: enrolling stays in the portal (the wrapper never submits it).
+  corsi(body, data) {
+    const corsi = (data && data.corsi) || [];
+    setPageHead("corsi", { title: "Corsi", subtitle: "Insegnamenti a cui puoi iscriverti per seguire il corso." });
+    const portal = el("a", { class: "btn btn-ghost btn-sm mt-3", href: "/totem/jsp/IscCorsiStudente/menuIscrizioni.jsp", target: "_blank", rel: "noopener" }, [icoNode("external", 14), el("span", {}, "Iscriviti nel portale")]);
+    if (!corsi.length) { body.replaceChildren(emptyState("Nessun corso", "Al momento non ci sono corsi a cui iscriversi.", "book"), portal); return; }
+    body.replaceChildren(
+      dataTable(
+        [{ label: "Insegnamento" }, { label: "Anno" }, { label: "CFU", num: true }, { label: "Docente" }, { label: "Sessione o ciclo" }, { label: "Classe virtuale" }],
+        corsi.map((c) => [
+          { node: el("div", { class: "row-cell-name" }, [el("strong", {}, txt(c.nome)), c.codice ? el("span", { class: "row-cell-sub" }, c.codice) : null]) },
+          { mono: true, node: el("span", { class: "mono" }, txt(c.annoAccademico)) },
+          { num: true, node: c.cfu != null ? String(c.cfu) : "—" },
+          txt(c.docente),
+          txt(c.sessione),
+          txt(c.classeVirtuale),
+        ]),
+      ),
+      portal,
+    );
+  },
+
+  prenotazioni(body, data) {
+    const list = (data && data.prenotazioni) || [];
+    setPageHead("prenotazioni", { title: "Prenotazioni", subtitle: "Le tue prenotazioni agli appelli, attive e passate." });
+    if (!list.length) { body.replaceChildren(emptyState("Nessuna prenotazione", "Non risultano prenotazioni agli esami.", "calendar")); return; }
+    const hasUpcoming = list.some((p) => p.dataEsame && p.dataEsame >= todayIso());
+    const exportLink = hasUpcoming
+      ? el("a", { class: "btn btn-secondary btn-sm mb-4", href: "/prenotazioni/calendario.ics", download: "esami-prenotati.ics" }, [icoNode("calendar", 14), el("span", {}, "Aggiungi al calendario")])
+      : null;
+    body.replaceChildren(...[exportLink].filter(Boolean), el("div", { class: "list-rows" }, list.map((p) => {
+      const details = el("div", { class: "service-details" });
+      const ricevuta = p.ref
+        ? el("a", { class: "btn btn-ghost btn-sm", href: `/prenotazioni/ricevuta?${new URLSearchParams(p.ref)}`, target: "_blank", rel: "noopener" }, [icoNode("download", 14), el("span", {}, "Ricevuta")])
+        : null;
+      return el("div", { class: "list-row" }, [
+        el("div", { class: "list-icon" }, [icoNode("calendar", 18)]),
+        el("div", { class: "list-body" }, [
+          el("div", { class: "list-title" }, txt(p.insegnamento)),
+          el("div", { class: "list-sub" }, [
+            `${fmtDate(p.dataEsame)} · appello ${txt(p.appello)} · ${txt(p.tipologia)} · ${txt(p.docente)}`,
+          ]),
+          el("div", { class: "flex-row gap-2 mt-3", style: { flexWrap: "wrap" } }, [
+            p.attiva ? tag("Attiva", "ok") : tag("Chiusa", "muted"),
+            p.posizione != null ? tag(`${p.posizione}° su ${p.prenotati}`, "muted") : null,
+            p.verbale ? tag(`Verbale ${p.verbale}`, "info") : null,
+          ]),
+          details,
+          el("div", { class: "flex-row gap-2 mt-3" }, [
+            p.ref ? prenotazioneDetailsButton(p.ref, details) : null,
+            ricevuta,
+          ]),
+        ]),
+      ]);
+    })));
   },
 
   anagrafica(body, data) {
@@ -889,6 +1643,91 @@ function serviceDetailsButton(s, target) {
       btn.remove();
     }
   }, [icoNode("zap", 14), el("span", {}, "Mostra dettagli")]);
+}
+
+// Syllabus for one course, shown in a full-width row under the clicked one.
+function infoInsegnamentoButton(idCorIns) {
+  return el("button", { class: "btn btn-ghost btn-sm mt-3", type: "button",
+    onClick: async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      btn.replaceChildren(el("span", {}, "Caricamento…"));
+      const r = await api(`/appelli/info?idCorIns=${encodeURIComponent(idCorIns)}`);
+      if (!r.ok) {
+        btn.disabled = false;
+        btn.replaceChildren(icoNode("book", 14), el("span", {}, "Info corso"));
+        toast(describeError(r.body), "bad");
+        return;
+      }
+      const d = r.body;
+      const block = (k, v) => v ? [el("dt", {}, k), el("dd", {}, v)] : [];
+      const rows = [
+        ...block("Obiettivi", d.obiettivi),
+        ...block("Prerequisiti", d.prerequisiti),
+        ...block("Metodi di insegnamento", d.metodiInsegnamento),
+        ...block("Metodi di valutazione", d.metodiValutazione),
+        ...block("Programma", d.programma),
+        ...(d.moduli || []).flatMap((m) => block(
+          `${txt(m.nome)} · ${m.cfu ?? "—"} CFU · ${txt(m.docente)}`,
+          m.programma || "Programma non indicato.",
+        )),
+      ];
+      const tr = btn.closest("tr");
+      const cell = el("td", { colspan: String(tr.children.length) }, rows.length
+        ? el("dl", { class: "dl dl-prose" }, rows)
+        : el("p", { class: "muted" }, "Il docente non ha pubblicato informazioni su questo corso."));
+      tr.after(el("tr", {}, cell));
+      btn.remove();
+    }
+  }, [icoNode("book", 14), el("span", {}, "Info corso")]);
+}
+
+function prenotazioneDetailsButton(ref, target) {
+  return el("button", { class: "btn btn-secondary btn-sm", type: "button",
+    onClick: async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      btn.replaceChildren(el("span", {}, "Caricamento…"));
+      const r = await api(`/prenotazioni/dossier?${new URLSearchParams(ref)}`);
+      if (!r.ok) {
+        btn.disabled = false;
+        btn.replaceChildren(icoNode("zap", 14), el("span", {}, "Dettagli"));
+        toast(describeError(r.body), "bad");
+        return;
+      }
+      // Dossier: booking details, then past attempts and the syllabus.
+      const { dettaglio: d, tentativi, info, giorni } = r.body;
+      const rows = [
+        ["Data e ora", `${fmtDate(d.dataEsame)}${d.orario ? ` · ${d.orario}` : ""}${giorni != null && giorni >= 0 ? ` · ${giorni === 0 ? "oggi" : giorni === 1 ? "domani" : `tra ${giorni} giorni`}` : ""}`],
+        ["Modalità", d.modalita],
+        ["Sessione", d.sessione],
+        ["Edificio", d.edificio],
+        ["Aula", d.aula],
+        ["Prenotazioni", `${fmtDate(d.inizioPrenotazione)} – ${fmtDate(d.finePrenotazione)}`],
+        ["Numero prenotazione", d.numeroPrenotazione],
+        ["Comunicazioni", d.comunicazioni],
+        ["Moduli", (d.moduli || []).map((m) => `${txt(m.nome)} (${txt(m.ssd)}, ${m.cfu ?? "—"} CFU)`).join(" · ") || null],
+      ];
+      const past = tentativi ? tentativi.tentativi.filter((t) => t.esito !== "in_programma") : [];
+      const syllabus = info ? [
+        ["Obiettivi", info.obiettivi], ["Metodi di valutazione", info.metodiValutazione], ["Programma", info.programma],
+        ...(info.moduli || []).map((m) => [txt(m.nome), m.programma]),
+      ].filter(([, v]) => v) : [];
+      target.replaceChildren(...[
+        el("dl", { class: "dl mt-3" }, rows.flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, txt(v))])),
+        past.length ? el("div", { class: "mt-4" }, [
+          el("div", { class: "list-sub mb-3" }, `Tentativi precedenti${tentativi.superatoAl ? ` · superato al ${tentativi.superatoAl}°` : ""}`),
+          el("div", { class: "flex-row gap-2", style: { flexWrap: "wrap" } }, past.map((t) =>
+            el("span", { class: `tag tag-${ESITO[t.esito].kind}` }, `${t.data ? fmtDate(t.data) : "—"} · ${ESITO[t.esito].text}${t.voto ? ` · ${t.voto}` : ""}`))),
+        ]) : null,
+        syllabus.length ? el("details", { class: "mt-4" }, [
+          el("summary", { class: "list-sub" }, "Programma del corso"),
+          el("dl", { class: "dl dl-prose mt-3" }, syllabus.flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, v)])),
+        ]) : null,
+      ].filter(Boolean));
+      btn.remove();
+    }
+  }, [icoNode("zap", 14), el("span", {}, "Dettagli")]);
 }
 
 function syncAaOptions(anni) {
