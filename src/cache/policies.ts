@@ -18,6 +18,10 @@ export const CachePolicy = {
   certificati: 1 * HOUR,
   verbali: 5 * 60 * 1000,
   esamiPendenti: 5 * 60 * 1000,
+  prenotazioni: 5 * 60 * 1000,
+  isee: 1 * HOUR,
+  corsi: 1 * HOUR,
+  infoInsegnamento: 24 * HOUR,
 } as const;
 
 // A session is dropped after this long without use, which is also the hard cap on

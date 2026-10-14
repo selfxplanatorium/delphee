@@ -126,6 +126,13 @@ export interface PianoEsame {
   cfu: number | null;
   annoCorso: string | null;
   stato: "superato" | "in_corso" | "da_fare";
+  ssd: string | null;
+  // Tipo attività formativa: A base, B caratterizzante, C affine, D a scelta,
+  // E prova finale, F altre attività.
+  taf: string | null;
+  // Plan section the exam belongs to, e.g. "Insegnamenti obbligatori" or an
+  // elective group ("QUADRO 1 Seconda lingua triennale 12 CFU a scelta tra:").
+  gruppo: string | null;
 }
 
 export interface Piano {
@@ -136,12 +143,16 @@ export interface Piano {
   // account has none or the SSO bridge failed.
   piani: PianoGomp[];
   composerUrl: string | null;
+  // The GOMP plan `esami` was read from (its PDF), or null when `esami` comes
+  // from Delphi's own listing or is empty.
+  esamiDa: { aa: string | null; status: string | null } | null;
 }
 
 // One row of the GOMP piano listing. `composerUrl` opens the WebForms composer
 // (works only in a browser that already rode the Delphi→GOMP SSO; the wrapper
-// exposes it for completeness).
+// exposes it for completeness). `ps` is the plan id for GET /piano/pdf.
 export interface PianoGomp {
+  ps: string | null;
   aa: string | null;
   ultimaModifica: string | null; // "dd/mm/yyyy hh:mm:ss", as rendered
   denominazione: string | null;
@@ -278,6 +289,123 @@ export interface EsamePendente {
 export interface EsamiPendentiResponse {
   header: CarrieraHeader;
   esami: EsamePendente[];
+}
+
+// ---- Prenotazioni esami ----
+
+// Form fields Delphi needs to address one booking from the bookings list
+// (Dettagli / Ristampa). Opaque to clients: pass them back unchanged.
+export interface PrenotazioneRef {
+  id: string;
+  index: string;
+  ordine: string;
+}
+
+export interface Prenotazione {
+  insegnamento: string | null;
+  cfu: number | null;
+  codice: string | null;
+  docente: string | null;
+  annoAccademico: string | null;
+  tipologia: string | null;
+  finePrenotazione: string | null; // ISO
+  dataEsame: string | null; // ISO
+  appello: string | null;
+  posizione: number | null; // your place in the list of booked students
+  prenotati: number | null;
+  sede: string | null;
+  turno: string | null;
+  attiva: boolean;
+  verbale: string | null;
+  ref: PrenotazioneRef | null;
+}
+
+export interface PrenotazioniResponse {
+  prenotazioni: Prenotazione[];
+}
+
+export interface ModuloPrenotazione {
+  nome: string | null;
+  docente: string | null;
+  ssd: string | null;
+  cfu: number | null;
+}
+
+export interface PrenotazioneDettaglio {
+  insegnamento: string | null;
+  docente: string | null;
+  annoAccademico: string | null;
+  dataEsame: string | null; // ISO
+  orario: string | null;
+  inizioPrenotazione: string | null; // ISO
+  finePrenotazione: string | null; // ISO
+  modalita: string | null;
+  tipologia: string | null;
+  appello: string | null;
+  sessione: string | null;
+  edificio: string | null;
+  aula: string | null;
+  comunicazioni: string | null;
+  numeroPrenotazione: string | null;
+  moduli: ModuloPrenotazione[];
+}
+
+// ---- Scheda insegnamento (calendario → info) ----
+
+export interface ModuloInsegnamento {
+  nome: string | null;
+  cfu: number | null;
+  ssd: string | null;
+  docente: string | null;
+  programma: string | null;
+}
+
+// Teacher-provided syllabus. Every text field is null when Delphi shows
+// "Non Indicato", which is common.
+export interface InfoInsegnamento {
+  obiettivi: string | null;
+  prerequisiti: string | null;
+  metodiInsegnamento: string | null;
+  metodiValutazione: string | null;
+  // Programme of a course without modules; module programmes are in `moduli`.
+  programma: string | null;
+  moduli: ModuloInsegnamento[];
+}
+
+// ---- Iscrizione ai corsi (Frequenza corsi di insegnamento) ----
+
+export interface CorsoIscrivibile {
+  codice: string | null;
+  nome: string | null;
+  annoAccademico: string | null;
+  cfu: number | null;
+  docente: string | null;
+  sessione: string | null; // "Sessione o Ciclo (o Sede)" column
+  classeVirtuale: string | null;
+  // Delphi's id for the "Iscriviti" form. Exposed for reference only: the
+  // wrapper does not submit enrolments.
+  id: string | null;
+}
+
+export interface CorsiResponse {
+  corsi: CorsoIscrivibile[];
+}
+
+// ---- ISEE-U authorization ----
+
+export interface AutorizzazioneIsee {
+  annoAccademico: string | null;
+  autorizzazione: string | null;
+  dataAutorizzazione: string | null; // "DD/MM/YYYY hh:mm:ss" as shown by Delphi
+  stato: string | null;
+  ultimoAccessoInps: string | null;
+  erroreInps: string | null;
+  dataElaborazione: string | null;
+  protocollo: string | null;
+}
+
+export interface IseeResponse {
+  autorizzazioni: AutorizzazioneIsee[];
 }
 
 // ---- Tasse / bollettini ----

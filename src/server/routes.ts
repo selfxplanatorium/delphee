@@ -10,7 +10,7 @@ import { recordFailure } from "./failure-log.js";
 import { renderShell } from "./static/index.html.js";
 import { renderPrivacy, renderProgetto } from "./static/doc.html.js";
 import type { Session } from "../client/session.js";
-import type { EsamiFilter, Stato, SessionInfo } from "../types.js";
+import type { EsamiFilter, Stato, SessionInfo, PrenotazioneRef } from "../types.js";
 
 interface RouteDeps {
   registry: SessionRegistry;
@@ -93,6 +93,16 @@ function parseIntQuery(value?: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+// Booking address from the query string. All three fields come from the
+// /prenotazioni list and are numeric; anything else is rejected before it
+// reaches a Delphi form.
+function parsePrenotazioneRef(q: Record<string, unknown>): PrenotazioneRef | null {
+  const { id, index, ordine } = q;
+  const digits = (v: unknown): v is string => typeof v === "string" && /^\d{1,12}$/.test(v);
+  if (!digits(id) || !digits(index) || !digits(ordine)) return null;
+  return { id, index, ordine };
+}
+
 export function buildRoutes(deps: RouteDeps): Router {
   const r = Router();
   const { registry, store, config, version } = deps;
@@ -170,6 +180,23 @@ export function buildRoutes(deps: RouteDeps): Router {
 
   // ---- data (all token-protected) ----
   r.get("/carriera", auth, (_req, res) => send(res, apiOf(res).getCarriera()));
+  r.get("/carriera/insights", auth, (_req, res) => send(res, apiOf(res).getInsights()));
+
+  // Session planner. `escludi` is a comma-separated list of exam codes to
+  // leave out (the student is not taking them this session).
+  const parseEscludi = (v: unknown) =>
+    new Set(typeof v === "string" ? v.split(",").map((s) => s.trim()).filter((s) => /^\d{1,12}$/.test(s)) : []);
+  r.get("/carriera/sessione", auth, (req, res) => send(res, apiOf(res).getSessione(parseEscludi(req.query.escludi))));
+  r.get("/carriera/sessione.ics", auth, async (req, res) => {
+    try {
+      const ics = await apiOf(res).getSessioneIcs(parseEscludi(req.query.escludi));
+      res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="sessione-pianificata.ics"`);
+      res.send(ics);
+    } catch (err) {
+      fail(res, err);
+    }
+  });
 
   r.get("/carriera/esami", auth, (req, res) => {
     const q = req.query as Record<string, string | undefined>;
@@ -202,7 +229,31 @@ export function buildRoutes(deps: RouteDeps): Router {
     }));
   });
 
+  r.get("/appelli/info", auth, (req, res) => {
+    const id = req.query.idCorIns;
+    if (typeof id !== "string" || !/^\d{1,12}$/.test(id)) {
+      return res.status(400).json({ error: "invalid_insegnamento" });
+    }
+    send(res, apiOf(res).getInfoInsegnamento(id));
+  });
+
   r.get("/piano", auth, (_req, res) => send(res, apiOf(res).getPiano()));
+
+  // Plan PDF from GOMP. `ps` is the plan id returned in /piano's `piani`.
+  r.get("/piano/pdf", auth, async (req, res) => {
+    const ps = req.query.ps;
+    if (typeof ps !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ps)) {
+      return res.status(400).json({ error: "invalid_piano" });
+    }
+    try {
+      const { body, contentType } = await apiOf(res).getPianoPdf(ps);
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Content-Disposition", `inline; filename="piano-${ps.slice(0, 8)}.pdf"`);
+      res.send(body);
+    } catch (err) {
+      fail(res, err);
+    }
+  });
   r.get("/anagrafica", auth, (_req, res) => send(res, apiOf(res).getAnagrafica()));
   r.get("/tasse", auth, (_req, res) => send(res, apiOf(res).getBollettini()));
   r.get("/servizi", auth, (_req, res) => send(res, apiOf(res).getServizi()));
@@ -239,6 +290,57 @@ export function buildRoutes(deps: RouteDeps): Router {
   r.get("/certificati", auth, (_req, res) => send(res, apiOf(res).getCertificati()));
   r.get("/verbali", auth, (_req, res) => send(res, apiOf(res).getVerbali()));
   r.get("/esami-pendenti", auth, (_req, res) => send(res, apiOf(res).getEsamiPendenti()));
+
+  r.get("/tasse/isee", auth, (_req, res) => send(res, apiOf(res).getIsee()));
+  r.get("/corsi", auth, (_req, res) => send(res, apiOf(res).getCorsi()));
+
+  r.get("/iscrizione/domanda", auth, async (_req, res) => {
+    try {
+      const { body, contentType } = await apiOf(res).getDomandaIscrizione();
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Content-Disposition", `inline; filename="domanda-iscrizione.pdf"`);
+      res.send(body);
+    } catch (err) {
+      fail(res, err);
+    }
+  });
+  r.get("/prenotazioni", auth, (_req, res) => send(res, apiOf(res).getPrenotazioni()));
+
+  r.get("/prenotazioni/calendario.ics", auth, async (_req, res) => {
+    try {
+      const ics = await apiOf(res).getPrenotazioniIcs();
+      res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="esami-prenotati.ics"`);
+      res.send(ics);
+    } catch (err) {
+      fail(res, err);
+    }
+  });
+
+  r.get("/prenotazioni/dossier", auth, (req, res) => {
+    const ref = parsePrenotazioneRef(req.query);
+    if (!ref) return res.status(400).json({ error: "invalid_prenotazione" });
+    send(res, apiOf(res).getDossier(ref));
+  });
+
+  r.get("/prenotazioni/dettaglio", auth, (req, res) => {
+    const ref = parsePrenotazioneRef(req.query);
+    if (!ref) return res.status(400).json({ error: "invalid_prenotazione" });
+    send(res, apiOf(res).getPrenotazioneDettaglio(ref));
+  });
+
+  r.get("/prenotazioni/ricevuta", auth, async (req, res) => {
+    const ref = parsePrenotazioneRef(req.query);
+    if (!ref) return res.status(400).json({ error: "invalid_prenotazione" });
+    try {
+      const { body, contentType } = await apiOf(res).getPrenotazioneRicevuta(ref);
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Content-Disposition", `inline; filename="prenotazione-${ref.id}.pdf"`);
+      res.send(body);
+    } catch (err) {
+      fail(res, err);
+    }
+  });
 
   r.get("/tasse/ricevuta", auth, async (req, res) => {
     const q = req.query as Record<string, string | undefined>;
@@ -311,6 +413,48 @@ export function buildRoutes(deps: RouteDeps): Router {
       fail(res, err);
     }
   });
+
+  // GOMP mirror, same idea as /totem/*: GOMP's root paths are served on the
+  // wrapper origin, so the plan composer's WebForms postbacks, ASP.NET AJAX
+  // partial updates, and relative links resolve back here unchanged. The
+  // wrapper holds the GOMP session; the browser never sees GOMP cookies.
+  // Forwarded request headers are the ones WebForms reads.
+  // ponytail: the prefix list comes from the pages reachable with our test
+  // accounts (plan list, error page). The composer itself could not be opened,
+  // so a path it uses outside this list would 404 here; add it if one shows up.
+  const GOMP_PREFIXES = [
+    "/WorkFlow2011", "/Questionari", "/Scripts", "/CSS", "/images", "/ig_res",
+    "/ScriptResource.axd", "/WebResource.axd",
+  ];
+  const GOMP_HEADERS = ["content-type", "x-microsoftajax", "x-requested-with", "accept"];
+  r.all(
+    GOMP_PREFIXES.flatMap((p) => [p, `${p}/*`]),
+    auth,
+    express.raw({ type: () => true, limit: "8mb" }),
+    async (req, res) => {
+      try {
+        const headers: Record<string, string> = {};
+        for (const h of GOMP_HEADERS) {
+          const v = req.header(h);
+          if (v) headers[h] = v;
+        }
+        const body = Buffer.isBuffer(req.body) && req.body.length ? req.body : undefined;
+        const { status, body: out, contentType, location } = await apiOf(res).proxyGomp(req.originalUrl, {
+          method: req.method,
+          body,
+          headers,
+        });
+        if (location && status >= 300 && status < 400) {
+          return res.status(status).location(location).end();
+        }
+        res.setHeader("Content-Security-Policy", "frame-ancestors 'none'");
+        if (contentType) res.setHeader("Content-Type", contentType);
+        res.status(status).send(out);
+      } catch (err) {
+        fail(res, err);
+      }
+    },
+  );
 
   return r;
 }

@@ -1,4 +1,5 @@
 import type { Fetcher } from "./fetcher.js";
+import type { GompClient } from "./gomp.js";
 import { NonRetryableError, RetryableError, withBackoff } from "../utils/retry.js";
 import { logger } from "../logger.js";
 import type { SessionInfo, SessionState } from "../types.js";
@@ -40,6 +41,10 @@ export class Session {
   private matricola: string | null = null;
   private creds: Credentials | null = null;
   private loginInFlight: Promise<void> | null = null;
+  // GOMP session behind the /gomp mirror. Opened on first use, dropped with
+  // the Delphi session.
+  private gomp: GompClient | null = null;
+  private gompOpening: Promise<GompClient> | null = null;
 
   // `seed` pre-authenticates the session without any network handshake — used
   // only by the offline demo user (see server/demo.ts). Real sessions pass no
@@ -123,7 +128,31 @@ export class Session {
     }
   }
 
+  // Current GOMP session, or a new one from `open` when there is none or
+  // `fresh` asks to replace it. A page load fires many asset requests at once,
+  // so concurrent opens collapse onto one SSO handshake.
+  async useGomp(open: () => Promise<GompClient>, fresh = false): Promise<GompClient> {
+    if (this.gomp && !fresh) return this.gomp;
+    if (!this.gompOpening) {
+      this.gompOpening = open()
+        .then((g) => {
+          this.setGomp(g);
+          return g;
+        })
+        .finally(() => {
+          this.gompOpening = null;
+        });
+    }
+    return this.gompOpening;
+  }
+
+  private setGomp(g: GompClient | null): void {
+    if (this.gomp && this.gomp !== g) void this.gomp.close();
+    this.gomp = g;
+  }
+
   logout(): void {
+    this.setGomp(null);
     this.fetcher.clearCookies();
     this.creds = null;
     this.state = "logged_out";

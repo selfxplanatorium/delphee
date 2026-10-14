@@ -12,13 +12,22 @@ import { Fetcher } from "../client/fetcher.js";
 import { Session } from "../client/session.js";
 import { Api } from "./api.js";
 import type { ProxyResponse } from "../client/fetcher.js";
+import type { GompProxyResponse } from "../client/gomp.js";
 import type {
   Anagrafica,
   Appello,
+  AppelloCalendario,
   CarrieraResponse,
   CertificatiResponse,
   EsamiPendentiResponse,
+  CorsiResponse,
+  InfoInsegnamento,
+  IseeResponse,
   Piano,
+  PianoEsame,
+  PrenotazioneDettaglio,
+  PrenotazioneRef,
+  PrenotazioniResponse,
   RicevutaRef,
   ServiziResponse,
   SituazioneTasse,
@@ -136,17 +145,89 @@ const DEMO_PENDENTI: EsamiPendentiResponse = {
   ],
 };
 
+// The active booking is always three weeks ahead, so the demo shows it as
+// upcoming (Home, calendar export) whatever the current date.
+const isoInDays = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+
+const DEMO_PRENOTAZIONI: PrenotazioniResponse = {
+  prenotazioni: [
+    { insegnamento: "Reti di Calcolatori", cfu: 9, codice: "8039299", docente: "BIANCHI", annoAccademico: "2023/2024", tipologia: "ESAME FINALE", finePrenotazione: isoInDays(16), dataEsame: isoInDays(21), appello: "II", posizione: 12, prenotati: 34, sede: null, turno: null, attiva: true, verbale: null, ref: { id: "9001", index: "0", ordine: "12" } },
+    { insegnamento: "Reti di Calcolatori", cfu: 9, codice: "8039299", docente: "BIANCHI", annoAccademico: "2023/2024", tipologia: "ESAME FINALE", finePrenotazione: "2024-06-05", dataEsame: "2024-06-10", appello: "I", posizione: 3, prenotati: 41, sede: null, turno: null, attiva: false, verbale: null, ref: { id: "9000", index: "1", ordine: "3" } },
+  ],
+};
+
+const DEMO_PRENOTAZIONE_DETTAGLIO: PrenotazioneDettaglio = {
+  insegnamento: "Reti di Calcolatori", docente: "BIANCHI LUCA", annoAccademico: "2023/2024",
+  dataEsame: isoInDays(21), orario: "09:30", inizioPrenotazione: isoInDays(-10), finePrenotazione: isoInDays(16),
+  modalita: "SCRITTO", tipologia: "ESAME FINALE", appello: "II", sessione: "ESTIVA",
+  edificio: "Ingegneria Didattica", aula: "Aula 7", comunicazioni: null, numeroPrenotazione: "9001",
+  moduli: [{ nome: "Reti di Calcolatori", docente: "BIANCHI LUCA", ssd: "ING-INF/03", cfu: 9 }],
+};
+
+const DEMO_ISEE: IseeResponse = {
+  autorizzazioni: [
+    { annoAccademico: "2023/2024", autorizzazione: "Autorizzo l'Ateneo", dataAutorizzazione: "15/09/2023 10:00:00", stato: "Autorizzazione concessa, attestazione isee processata, tasse calcolate", ultimoAccessoInps: "16/09/2023 08:00:00", erroreInps: null, dataElaborazione: "17/09/2023 09:00:00", protocollo: "INPS-ISEE-2023-00000000X-00" },
+  ],
+};
+
+const DEMO_CORSI: CorsiResponse = {
+  corsi: [
+    { codice: "8039300", nome: "Ingegneria del Software", annoAccademico: "2023/2024", cfu: 9, docente: "VERDI ANNA", sessione: "PRIMO SEMESTRE", classeVirtuale: "Attivata", id: "1001" },
+    { codice: "8039301", nome: "Sistemi Operativi", annoAccademico: "2023/2024", cfu: 9, docente: "NERI PAOLO", sessione: "UNICO", classeVirtuale: "Attivata", id: "1002" },
+  ],
+};
+
+const DEMO_CALENDARIO: AppelloCalendario[] = [
+  { insegnamento: "RETI DI CALCOLATORI", idCorIns: "5001", cfu: 9, codice: "8039299", canale: "UNICO", docente: "BIANCHI LUCA", sessione: "INVERNALE", appello: "I", dataEsame: isoInDays(21), ora: "09:30", aula: "Aula 7", inizioPrenotazione: isoInDays(-10), finePrenotazione: isoInDays(16), stato: "aperto" },
+  { insegnamento: "RETI DI CALCOLATORI", idCorIns: "5001", cfu: 9, codice: "8039299", canale: "UNICO", docente: "BIANCHI LUCA", sessione: "INVERNALE", appello: "II", dataEsame: isoInDays(49), ora: "09:30", aula: "Aula 7", inizioPrenotazione: isoInDays(25), finePrenotazione: isoInDays(44), stato: "chiuso" },
+  { insegnamento: "INGEGNERIA DEL SOFTWARE", idCorIns: "5002", cfu: 9, codice: "8039300", canale: "UNICO", docente: "VERDI ANNA", sessione: "INVERNALE", appello: "I", dataEsame: isoInDays(23), ora: "14:00", aula: "Aula 3", inizioPrenotazione: isoInDays(-5), finePrenotazione: isoInDays(18), stato: "aperto" },
+  { insegnamento: "INGEGNERIA DEL SOFTWARE", idCorIns: "5002", cfu: 9, codice: "8039300", canale: "UNICO", docente: "VERDI ANNA", sessione: "INVERNALE", appello: "II", dataEsame: isoInDays(52), ora: "14:00", aula: "Aula 3", inizioPrenotazione: isoInDays(30), finePrenotazione: isoInDays(47), stato: "chiuso" },
+];
+
+const DEMO_INFO_INSEGNAMENTO: InfoInsegnamento = {
+  obiettivi: "Conoscere i protocolli di rete e progettare semplici applicazioni distribuite.",
+  prerequisiti: "Fondamenti di Informatica.",
+  metodiInsegnamento: "FRONTALE",
+  metodiValutazione: "SCRITTO E ORALE",
+  programma: "Modello ISO/OSI e TCP/IP.\nLivello di trasporto: TCP e UDP.\nRouting e indirizzamento IP.",
+  moduli: [],
+};
+
+const pe = (codice: string, nome: string, cfu: number, annoCorso: string, stato: PianoEsame["stato"], taf = "B", gruppo = "Insegnamenti obbligatori", ssd: string | null = "ING-INF/05"): PianoEsame =>
+  ({ codice, nome, cfu, annoCorso, stato, ssd, taf, gruppo });
+
+// 180 CFU, consistent with DEMO_CARRIERA: passed exams are "superato".
 const DEMO_PIANO: Piano = {
   cdl: CDL, annoCorso: "3",
   esami: [
-    { codice: "8039245", nome: "Analisi Matematica I", cfu: 9, annoCorso: "1", stato: "superato" },
-    { codice: "8039299", nome: "Reti di Calcolatori", cfu: 9, annoCorso: "3", stato: "in_corso" },
-    { codice: "8039300", nome: "Ingegneria del Software", cfu: 9, annoCorso: "3", stato: "da_fare" },
+    pe("8039245", "Analisi Matematica I", 9, "1", "superato", "A", undefined, "MAT/05"),
+    pe("8039246", "Fondamenti di Informatica", 12, "1", "superato"),
+    pe("8039247", "Fisica Generale", 9, "1", "superato", "A", undefined, "FIS/01"),
+    pe("8039248", "Lingua Inglese B2", 3, "1", "superato", "F", "Ulteriori attività formative", null),
+    pe("8039302", "Geometria", 9, "1", "da_fare", "A", undefined, "MAT/03"),
+    pe("8039249", "Algoritmi e Strutture Dati", 9, "2", "superato"),
+    pe("8039250", "Basi di Dati", 6, "2", "superato"),
+    pe("8039303", "Analisi Matematica II", 9, "2", "da_fare", "A", undefined, "MAT/05"),
+    pe("8039304", "Elettronica", 9, "2", "da_fare", "C", undefined, "ING-INF/01"),
+    pe("8039305", "Calcolo Numerico", 6, "2", "da_fare", "C", undefined, "MAT/08"),
+    pe("8039301", "Sistemi Operativi", 9, "2", "da_fare"),
+    pe("8039306", "Ricerca Operativa", 9, "2", "da_fare", "C", undefined, "MAT/09"),
+    pe("8039314", "Economia e Organizzazione Aziendale", 9, "2", "da_fare", "C", undefined, "ING-IND/35"),
+    pe("8039299", "Reti di Calcolatori", 9, "3", "in_corso", "B", undefined, "ING-INF/03"),
+    pe("8039300", "Ingegneria del Software", 9, "3", "da_fare"),
+    pe("8039307", "Programmazione Web", 9, "3", "da_fare"),
+    pe("8039308", "Telecomunicazioni", 9, "3", "da_fare", "C", undefined, "ING-INF/03"),
+    pe("8039309", "Automatica", 9, "3", "da_fare", "C", undefined, "ING-INF/04"),
+    pe("8039310", "Machine Learning", 9, "3", "da_fare", "D", "QUADRO 1 Un esame da 9 CFU a scelta tra:"),
+    pe("8039311", "Sicurezza Informatica", 9, "3", "da_fare", "D", "Insegnamenti a scelta dello studente"),
+    pe("8039312", "Tirocinio", 6, "3", "da_fare", "S", "Per stages e tirocini", null),
+    pe("8039313", "Prova finale", 3, "3", "da_fare", "E", "Per la prova finale", null),
   ],
   piani: [
-    { aa: "2024/2025", ultimaModifica: "04/10/2024 09:47:21", denominazione: "Curriculum unico", status: "Approvato", composerUrl: "https://uniroma2studenti.gomp.it" },
+    { ps: "00000000-0000-0000-0000-000000000000", aa: "2024/2025", ultimaModifica: "04/10/2024 09:47:21", denominazione: "Curriculum unico", status: "Approvato", composerUrl: "https://uniroma2studenti.gomp.it" },
   ],
   composerUrl: "https://delphi.uniroma2.it",
+  esamiDa: { aa: "2024/2025", status: "Approvato" },
 };
 
 const DEMO_APPELLI: Appello[] = [
@@ -196,6 +277,26 @@ export class DemoApi extends Api {
   async getPiano() { return { response: DEMO_PIANO, stale: false }; }
   async getAppelli(_insegnamento: string) { return { response: DEMO_APPELLI, stale: false }; }
 
+  async getPianoPdf(_ps: string): Promise<{ body: Buffer; contentType: string }> {
+    return { body: demoPdf("Delphee demo - piano di studi fittizio"), contentType: "application/pdf" };
+  }
+
+  async getPrenotazioni() { return { response: DEMO_PRENOTAZIONI, stale: false }; }
+  async getPrenotazioneDettaglio(_ref: PrenotazioneRef) { return { response: DEMO_PRENOTAZIONE_DETTAGLIO, stale: false }; }
+  async getCalendarioEsami() { return { response: DEMO_CALENDARIO, stale: false }; }
+  async getInfoInsegnamento(_idCorIns: string) { return { response: DEMO_INFO_INSEGNAMENTO, stale: false }; }
+  async getCorsi() { return { response: DEMO_CORSI, stale: false }; }
+
+  async getDomandaIscrizione(): Promise<{ body: Buffer; contentType: string }> {
+    return { body: demoPdf("Delphee demo - domanda di iscrizione fittizia"), contentType: "application/pdf" };
+  }
+
+  async getIsee() { return { response: DEMO_ISEE, stale: false }; }
+
+  async getPrenotazioneRicevuta(_ref: PrenotazioneRef): Promise<{ body: Buffer; contentType: string }> {
+    return { body: demoPdf("Delphee demo - prenotazione fittizia"), contentType: "application/pdf" };
+  }
+
   async getRicevuta(_ref: RicevutaRef): Promise<{ body: Buffer; contentType: string }> {
     return { body: demoPdf("Delphee demo - ricevuta fittizia"), contentType: "application/pdf" };
   }
@@ -208,9 +309,13 @@ export class DemoApi extends Api {
     return { code: "DEMO-A1B2C3" };
   }
 
+  async proxyGomp(): Promise<GompProxyResponse> {
+    return this.proxyPage();
+  }
+
   async proxyPage(): Promise<ProxyResponse> {
     const body = Buffer.from(
-      "<!doctype html><meta charset=utf-8><body style=\"font-family:sans-serif;padding:2rem\"><h1>Demo</h1><p>L'utente demo non apre pagine reali del portale Delphi.</p>",
+      "<!doctype html><meta charset=utf-8><body style=\"font-family:sans-serif;padding:2rem\"><h1>Demo</h1><p>L'utente demo non apre pagine reali di Delphi o GOMP.</p>",
       "utf8",
     );
     return { status: 200, body, contentType: "text/html; charset=utf-8", location: null };

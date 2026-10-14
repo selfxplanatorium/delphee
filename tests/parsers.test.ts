@@ -11,6 +11,11 @@ import * as verb from "../src/client/endpoints/verbali.js";
 import * as cal from "../src/client/endpoints/calendario.js";
 import * as pianoGomp from "../src/client/endpoints/piano-gomp.js";
 import * as pend from "../src/client/endpoints/esami-pendenti.js";
+import * as pren from "../src/client/endpoints/prenotazioni.js";
+import * as isee from "../src/client/endpoints/isee.js";
+import * as corsi from "../src/client/endpoints/corsi.js";
+import * as infoIns from "../src/client/endpoints/info-insegnamento.js";
+import * as pianoPdf from "../src/client/endpoints/piano-pdf.js";
 import { filterEsami, summarizeEsami } from "../src/client/endpoints/esami-search.js";
 
 // Tests run against real Delphi HTML captured against two accounts (one
@@ -254,6 +259,7 @@ describe("piano-gomp", () => {
     expect(p.ultimaModifica).toMatch(/^\d{2}\/\d{2}\/\d{4}/);
     expect(p.denominazione).toBeTruthy();
     expect(p.status).toBe("Approvato");
+    expect(p.ps).toBe("11111111-1111-1111-1111-111111111111");
   });
 
   it("resolves the page-relative composer link against the listing URL", () => {
@@ -294,5 +300,130 @@ describe("esami pendenti", () => {
   });
   it("returns an empty list when the page says 'Non ci sono esami'", () => {
     expect(p.esami.length).toBe(0);
+  });
+});
+
+describe("prenotazioni", () => {
+  const p = pren.parse(fx("visualizzaPrenotazioni.real.html"));
+  it("parses every booking row", () => {
+    expect(p.prenotazioni.length).toBe(11);
+  });
+  it("extracts dates, position, and the Dettagli/Ristampa form fields", () => {
+    const first = p.prenotazioni[0]!;
+    expect(first.insegnamento).toBe("LINGUA POLACCA 2 (UNICO)");
+    expect(first.cfu).toBe(12);
+    expect(first.annoAccademico).toBe("2025/2026");
+    expect(first.dataEsame).toBe("2026-06-17");
+    expect(first.finePrenotazione).toBe("2026-06-14");
+    expect(first.posizione).toBe(2);
+    expect(first.prenotati).toBe(2);
+    expect(first.attiva).toBe(false);
+    expect(first.verbale).toMatch(/^LETT-\d+$/);
+    expect(first.ref).toEqual({ id: "4824144", index: "0", ordine: "2" });
+  });
+  it("maps the '---' verbale marker to null", () => {
+    expect(p.prenotazioni.some((x) => x.verbale === null)).toBe(true);
+  });
+  it("returns an empty list when the page says 'Non risultano prenotazioni'", () => {
+    expect(pren.parse(fx("visualizzaPrenotazioni.empty.real.html")).prenotazioni).toEqual([]);
+  });
+});
+
+describe("prenotazione dettaglio", () => {
+  const d = pren.parseDettaglio(fx("dettagliPrenotazione.real.html"));
+  it("reads the label/value rows", () => {
+    expect(d.insegnamento).toBe("LINGUA POLACCA 2 (UNICO)");
+    expect(d.dataEsame).toBe("2026-06-17");
+    expect(d.orario).toBe("11:00");
+    expect(d.modalita).toBe("ORALE");
+    expect(d.sessione).toBe("ESTIVA");
+    expect(d.edificio).toBe("B");
+    expect(d.aula).toBe("STUDIO 38");
+    expect(d.comunicazioni).toBeNull();
+  });
+  it("reads the moduli table", () => {
+    expect(d.moduli).toHaveLength(2);
+    expect(d.moduli[0]).toMatchObject({ ssd: "L-LIN/21", cfu: 6 });
+  });
+});
+
+describe("isee", () => {
+  const i = isee.parse(fx("autorizzazioneIsee.real.html"));
+  it("reads one authorization per academic year and skips the header row", () => {
+    expect(i.autorizzazioni).toHaveLength(1);
+    expect(i.autorizzazioni[0]).toMatchObject({
+      annoAccademico: "2026/2027",
+      erroreInps: null,
+      protocollo: "INPS-ISEE-2026-00000000X-00",
+    });
+    expect(i.autorizzazioni[0]!.stato).toMatch(/tasse calcolate/);
+  });
+});
+
+describe("corsi iscrivibili", () => {
+  const c = corsi.parse(fx("visualizzaIscrivibili.real.html")).corsi;
+  it("parses every course row", () => {
+    expect(c).toHaveLength(18);
+  });
+  it("splits the code from the name and reads the Iscriviti id", () => {
+    expect(c[0]).toEqual({
+      codice: "804001392",
+      nome: "ABILITA' INFORMATICHE E TELEMATICHE",
+      annoAccademico: "2025/2026",
+      cfu: 2,
+      docente: "BARANIELLO VINCENZO",
+      sessione: "UNICO",
+      classeVirtuale: "Attivata",
+      id: "12719",
+    });
+  });
+  it("ignores markup nested in the description cell", () => {
+    expect(c[3]!.nome).toBe("LETTERATURA INGLESE 1");
+  });
+});
+
+describe("info insegnamento", () => {
+  it("reads a course without modules, including textarea and iframe values", () => {
+    const i = infoIns.parse(fx("infoEsame.real.html"));
+    expect(i.obiettivi).toMatch(/^OBIETTIVI FORMATIVI/);
+    expect(i.prerequisiti).toBe("Buona conoscenza della Lingua italiana.\nConoscenza di base della Letteratura italiana.");
+    expect(i.metodiInsegnamento).toBe("FRONTALE");
+    expect(i.metodiValutazione).toBe("ORALE");
+    expect(i.programma).toContain("valido per 12 cfu per i corsi di laurea in:");
+    expect(i.moduli).toEqual([]);
+  });
+  it("reads module headers and maps 'Non Indicato' to null", () => {
+    const i = infoIns.parse(fx("infoEsame.moduli.real.html"));
+    expect(i.obiettivi).toBeNull();
+    expect(i.programma).toBeNull();
+    expect(i.moduli).toHaveLength(2);
+    expect(i.moduli[0]).toEqual({ nome: "LETTERATURA ANGLO-AMERICANA 1 A", cfu: 6, ssd: "L-LIN/11", docente: "MARINO ELISABETTA", programma: null });
+  });
+});
+
+describe("piano pdf", () => {
+  // Positioned text items from a real GOMP plan PDF (extractItems output);
+  // the header and footer, which carry the student's name, are replaced.
+  const esami = pianoPdf.parse(JSON.parse(readFileSync(join(here, "fixtures", "pianoPdf.items.json"), "utf8")));
+  it("reads every exam and the full 180 CFU", () => {
+    expect(esami).toHaveLength(20);
+    expect(esami.reduce((s, e) => s + (e.cfu ?? 0), 0)).toBe(180);
+  });
+  it("assigns year, group, TAF, and SSD", () => {
+    expect(esami[0]).toEqual({
+      codice: "8048033", nome: "LETTERATURA ITALIANA", cfu: 12, annoCorso: "1",
+      ssd: "L-FIL-LET/10", taf: "A", gruppo: "Insegnamenti obbligatori",
+    });
+    expect(esami.filter((e) => e.annoCorso === "3").map((e) => e.codice)).toContain("804001080");
+  });
+  it("joins names that wrap onto a second line", () => {
+    expect(esami.find((e) => e.codice === "8047674")!.nome).toBe("FONDAMENTI DI GLOTTOLOGIA E LINGUISTICA");
+  });
+  it("keeps elective groups that continue on the next page under their year", () => {
+    const quadro7 = esami.find((e) => e.gruppo?.startsWith("QUADRO 7"))!;
+    expect(quadro7).toMatchObject({ codice: "8047851", annoCorso: "1", cfu: 6 });
+  });
+  it("leaves the SSD empty for activities without one", () => {
+    expect(esami.find((e) => e.codice === "804001080")).toMatchObject({ taf: "E", ssd: null, cfu: 6 });
   });
 });

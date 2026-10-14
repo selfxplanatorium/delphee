@@ -16,6 +16,7 @@ export function parse(html: string, pageUrl: string): PianoGomp[] {
     const href = cells.find("a[href*='Composer.aspx?PS=']").first().attr("href");
     if (!href) return;
     out.push({
+      ps: href.match(/[?&]PS=([0-9a-f-]{36})/i)?.[1] ?? null,
       aa: cleanText(cells.eq(0).text()) || null,
       ultimaModifica: cleanText(cells.eq(1).text()) || null,
       denominazione: cleanText(cells.eq(2).text()) || null,

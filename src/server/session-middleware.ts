@@ -45,9 +45,19 @@ export function requireSession(
           "/certificati": "certificati",
           "/verbali": "verbali",
           "/esami-pendenti": "esami-pendenti",
+          "/prenotazioni": "prenotazioni",
+          "/tasse/isee": "isee",
+          "/corsi": "corsi",
+        };
+        // Routes computed from several sources refresh all of them.
+        const basesByPath: Record<string, string[]> = {
+          "/carriera/insights": ["carriera", "piano", "prenotazioni", "bollettini", "anagrafica", "isee"],
+          "/carriera/sessione": ["piano", "prenotazioni"],
         };
         const base = baseByPath[req.path];
         if (base) store.delete(`${matricola}:${base}`);
+        for (const b of basesByPath[req.path] ?? []) store.delete(`${matricola}:${b}`);
+        if (req.path === "/carriera/sessione") store.deletePrefix(`${matricola}:calendario:`);
         else if (req.path === "/appelli") {
           store.deletePrefix(`${matricola}:${req.query.insegnamento ? "appelli:" : "calendario:"}`);
         }

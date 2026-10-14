@@ -65,6 +65,9 @@ export function parse(html: string, composerUrl: string | null = null): Piano {
           cfu: parseFloatSafe(cells.eq(2).text()),
           annoCorso: cleanText(cells.eq(3).text()) || null,
           stato: parseStato(cleanText(cells.last().text())),
+          ssd: null,
+          taf: null,
+          gruppo: null,
         });
       });
   }
@@ -74,5 +77,6 @@ export function parse(html: string, composerUrl: string | null = null): Piano {
     esami,
     piani: [], // static Delphi listing has no GOMP grid
     composerUrl,
+    esamiDa: null,
   };
 }
